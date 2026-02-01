@@ -4,7 +4,7 @@
   "description": "Healthy computer-use break reminders with push notifications",
   "type": "module",
   "scripts": {
-    "build": "vite build && cp src/manifest.json dist/ && cp -r src/assets/icons dist/src/assets/",
+    "build": "vite build && cp src/manifest.json dist/ && cp -r src/assets/* dist/src/assets/",
     "watch": "vite build --watch",
     "typecheck": "tsc --noEmit"
   },

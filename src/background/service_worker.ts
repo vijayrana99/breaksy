@@ -181,7 +181,7 @@ async function showNotification(): Promise<void> {
       type: 'basic',
       title: 'Time for an eye break 👀',
       message: `Look at something ~20 ft / 6 m away for ${settings.breakDurationSeconds} seconds.`,
-      iconUrl: 'src/assets/icons/icon128.png',
+      iconUrl: 'src/assets/icon128.png',
       buttons,
       requireInteraction: true,
     });
