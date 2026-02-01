@@ -98,12 +98,12 @@ async function restoreState() {
 
   if (remaining <= 0) {
     console.log('[Breakio] Interval elapsed during restart - showing reminder');
-    await setState({ remainingMs: settings.intervalMinutes * 60 * 1000, lastActiveAt: now });
+    await setState({ remainingMs: settings.intervalMinutes * 60 * 1000, lastActiveAt: now, nextNotificationAt: now });
     await showNotification();
     await scheduleReminder();
   } else {
     console.log(`[Breakio] State restored - ${remaining}ms remaining`);
-    await setState({ remainingMs: remaining, lastActiveAt: now });
+    await setState({ remainingMs: remaining });
     await scheduleReminder(remaining);
   }
 }
