@@ -1,0 +1,16 @@
+{
+  "name": "breakio",
+  "version": "1.0.0",
+  "description": "Healthy computer-use break reminders with push notifications",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "watch": "vite build --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.258",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}
