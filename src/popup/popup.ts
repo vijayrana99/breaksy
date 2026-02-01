@@ -13,6 +13,7 @@ const ELEMENTS = {
 } as const;
 
 let countdownInterval: ReturnType<typeof setInterval> | null = null;
+let displaySeconds = 0;
 let currentState: StateResponse | null = null;
 
 function formatTime(seconds: number): string {
@@ -44,10 +45,12 @@ function updateStatusDisplay(state: StateResponse): void {
 function startCountdown(): void {
   if (countdownInterval) clearInterval(countdownInterval);
 
-  let displaySeconds = currentState?.remainingSeconds ?? 0;
+  displaySeconds = currentState?.remainingSeconds ?? 0;
 
   const updateDisplay = () => {
-    ELEMENTS.statusText.textContent = `Next break in: ${formatTime(displaySeconds)}`;
+    if (currentState && !currentState.state.isPaused && !currentState.state.isIdle) {
+      ELEMENTS.statusText.textContent = `Next break in: ${formatTime(displaySeconds)}`;
+    }
   };
 
   updateDisplay();
@@ -74,6 +77,7 @@ async function refreshState(): Promise<void> {
     const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' }) as StateResponse;
     console.log('[Popup] Received state:', response);
     currentState = response;
+    displaySeconds = response.remainingSeconds;
     updateStatusDisplay(response);
 
     ELEMENTS.intervalSelect.value = PRESET_INTERVALS.includes(response.settings.intervalMinutes)
