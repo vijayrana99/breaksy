@@ -29,15 +29,20 @@ async function initializeExtension(): Promise<void> {
   if (!settings || Object.keys(settings).length === 0) {
     await setSettings(DEFAULT_SETTINGS);
   }
-  await setState({
-    isPaused: false,
-    isIdle: false,
-    remainingMs: DEFAULT_SETTINGS.intervalMinutes * 60 * 1000,
-    lastActiveAt: Date.now(),
-    nextAlarmAt: null,
-    lastNotifiedAt: null,
-    activeNotificationId: null,
-  });
+
+  const existingState = await getState();
+  if (!existingState || Object.keys(existingState).length === 0) {
+    await setState({
+      isPaused: false,
+      isIdle: false,
+      remainingMs: DEFAULT_SETTINGS.intervalMinutes * 60 * 1000,
+      lastActiveAt: Date.now(),
+      nextAlarmAt: null,
+      lastNotifiedAt: null,
+      activeNotificationId: null,
+    });
+  }
+
   await scheduleReminder();
   console.log('[Breakio] Initialized with defaults');
 }
