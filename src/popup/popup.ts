@@ -62,7 +62,7 @@ function startCountdown(): void {
 
 async function refreshState(): Promise<void> {
   try {
-    const response = await browser.runtime.sendMessage({ type: 'GET_STATE' }) as StateResponse;
+    const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' }) as StateResponse;
     currentState = response;
     updateStatusDisplay(response);
 
@@ -79,7 +79,7 @@ async function refreshState(): Promise<void> {
 
 async function sendMessage(type: MessageType, payload?: Record<string, unknown>): Promise<void> {
   try {
-    await browser.runtime.sendMessage({ type, payload } as Message);
+    await chrome.runtime.sendMessage({ type, payload } as Message);
     await refreshState();
   } catch (error) {
     console.error(`Failed to send message ${type}:`, error);
@@ -133,7 +133,7 @@ function setupEventListeners(): void {
 
   ELEMENTS.linkSettings.addEventListener('click', (e) => {
     e.preventDefault();
-    browser.runtime.openOptionsPage();
+    chrome.runtime.openOptionsPage();
   });
 }
 
