@@ -62,7 +62,9 @@ function startCountdown(): void {
 
 async function refreshState(): Promise<void> {
   try {
+    console.log('[Popup] Requesting state from background...');
     const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' }) as StateResponse;
+    console.log('[Popup] Received state:', response);
     currentState = response;
     updateStatusDisplay(response);
 
@@ -73,16 +75,20 @@ async function refreshState(): Promise<void> {
     ELEMENTS.intervalCustom.classList.toggle('hidden', PRESET_INTERVALS.includes(response.settings.intervalMinutes));
     ELEMENTS.breakDuration.value = response.settings.breakDurationSeconds.toString();
   } catch (error) {
-    console.error('Failed to refresh state:', error);
+    console.error('[Popup] Failed to refresh state:', error);
+    ELEMENTS.statusText.textContent = 'Error';
+    ELEMENTS.statusSubtext.textContent = String(error);
   }
 }
 
 async function sendMessage(type: MessageType, payload?: Record<string, unknown>): Promise<void> {
   try {
+    console.log('[Popup] Sending message:', type, payload);
     await chrome.runtime.sendMessage({ type, payload } as Message);
+    console.log('[Popup] Message sent successfully');
     await refreshState();
   } catch (error) {
-    console.error(`Failed to send message ${type}:`, error);
+    console.error(`[Popup] Failed to send message ${type}:`, error);
   }
 }
 

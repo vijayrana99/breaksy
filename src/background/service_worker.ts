@@ -285,6 +285,7 @@ async function handleTakeBreakNow(): Promise<void> {
 }
 
 chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
+  console.log('[Background] Received message:', message.type, message.payload);
   (async () => {
     try {
       switch (message.type) {
