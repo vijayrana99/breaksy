@@ -2,6 +2,8 @@ import { PRESET_INTERVALS, StateResponse, Message, MessageType } from '../shared
 
 const ELEMENTS = {
   statusText: document.getElementById('status-text') as HTMLElement,
+  statusLabel: document.getElementById('status-label') as HTMLElement,
+  statusTime: document.getElementById('status-time') as HTMLElement,
   statusSubtext: document.getElementById('status-subtext') as HTMLElement,
   intervalSelect: document.getElementById('interval-select') as HTMLSelectElement,
   intervalCustom: document.getElementById('interval-custom') as HTMLInputElement,
@@ -26,15 +28,18 @@ function updateStatusDisplay(state: StateResponse): void {
   const { state: runtimeState, remainingSeconds, settings } = state;
 
   if (runtimeState.isPaused) {
-    ELEMENTS.statusText.textContent = 'Paused';
+    ELEMENTS.statusLabel.textContent = '';
+    ELEMENTS.statusTime.textContent = 'Paused';
     ELEMENTS.statusSubtext.textContent = '';
     ELEMENTS.btnPause.textContent = 'Resume';
   } else if (runtimeState.isIdle) {
-    ELEMENTS.statusText.textContent = 'Idle (paused)';
-    ELEMENTS.statusSubtext.textContent = `Remaining: ${formatTime(remainingSeconds)}`;
+    ELEMENTS.statusLabel.textContent = 'Remaining: ';
+    ELEMENTS.statusTime.textContent = formatTime(remainingSeconds);
+    ELEMENTS.statusSubtext.textContent = '';
     ELEMENTS.btnPause.textContent = 'Resume';
   } else {
-    ELEMENTS.statusText.textContent = `Next break in: ${formatTime(remainingSeconds)}`;
+    ELEMENTS.statusLabel.textContent = 'Next break in: ';
+    ELEMENTS.statusTime.textContent = formatTime(remainingSeconds);
     ELEMENTS.statusSubtext.textContent = '';
     ELEMENTS.btnPause.textContent = 'Pause';
   }
@@ -49,7 +54,8 @@ function startCountdown(): void {
 
   const updateDisplay = () => {
     if (currentState && !currentState.state.isPaused && !currentState.state.isIdle) {
-      ELEMENTS.statusText.textContent = `Next break in: ${formatTime(displaySeconds)}`;
+      ELEMENTS.statusLabel.textContent = 'Next break in: ';
+      ELEMENTS.statusTime.textContent = formatTime(displaySeconds);
     }
   };
 

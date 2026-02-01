@@ -307,7 +307,12 @@ async function handleTakeBreakNow() {
     return;
   }
 
-  await setState({ activeNotificationId: null, lastNotifiedAt: null });
+  await setState({
+    activeNotificationId: null,
+    lastNotifiedAt: null,
+    remainingMs: settings.intervalMinutes * 60 * 1000,
+    lastActiveAt: Date.now(),
+  });
   await showNotification();
   console.log('[Breakio] Take Break Now triggered');
 }
