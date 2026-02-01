@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Breakio</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1 class="title">Breakio</h1>
+      <p class="tagline">Healthy breaks for your eyes</p>
+    </header>
+
+    <div class="status-card">
+      <div id="status-text" class="status-text">--:--</div>
+      <div id="status-subtext" class="status-subtext"></div>
+    </div>
+
+    <div class="controls">
+      <div class="control-group">
+        <label class="label" for="interval-select">Interval</label>
+        <div class="input-row">
+          <select id="interval-select" class="select">
+            <option value="20">20 min</option>
+            <option value="30">30 min</option>
+            <option value="45">45 min</option>
+            <option value="60">60 min</option>
+            <option value="90">90 min</option>
+            <option value="120">120 min</option>
+            <option value="custom">Custom...</option>
+          </select>
+          <input type="number" id="interval-custom" class="input input-number hidden" min="1" max="240" value="20">
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label class="label" for="break-duration">Break duration (seconds)</label>
+        <input type="number" id="break-duration" class="input" min="5" max="300" value="20">
+      </div>
+    </div>
+
+    <div class="buttons">
+      <button id="btn-take-break" class="btn btn-primary">Take Break Now</button>
+      <button id="btn-snooze" class="btn btn-secondary">Snooze 5 min</button>
+      <button id="btn-pause" class="btn btn-secondary">Pause</button>
+    </div>
+
+    <footer class="footer">
+      <a href="#" id="link-settings" class="link">Settings</a>
+    </footer>
+  </div>
+  <script type="module" src="popup.ts"></script>
+</body>
+</html>
