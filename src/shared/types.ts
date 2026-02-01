@@ -43,7 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   intervalMinutes: 20,
   breakDurationSeconds: 20,
   idleThresholdSeconds: 60,
-  snoozeMinutes: 1,
+  snoozeMinutes: 2,
 };
 
 export const DEFAULT_STATE: RuntimeState = {

@@ -103,7 +103,7 @@ function setupEventListeners(): void {
     if (value >= MIN_SNOOZE && value <= MAX_SNOOZE) {
       await sendMessage('SET_SNOOZE', { snooze: value });
     } else {
-      ELEMENTS.snoozeDuration.value = '1';
+      ELEMENTS.snoozeDuration.value = '2';
     }
   });
 
