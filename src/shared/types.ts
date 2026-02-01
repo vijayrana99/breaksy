@@ -11,6 +11,7 @@ export interface RuntimeState {
   remainingMs: number;
   lastActiveAt: number;
   nextAlarmAt: number | null;
+  nextNotificationAt: number | null;
   lastNotifiedAt: number | null;
   activeNotificationId: string | null;
 }
@@ -29,7 +30,8 @@ export type MessageType =
   | 'TAKE_BREAK_NOW'
   | 'SNOOZE'
   | 'RESUME'
-  | 'RESET';
+  | 'RESET'
+  | 'CHECK_NOTIFICATION';
 
 export interface StateResponse {
   settings: Settings;
@@ -50,6 +52,7 @@ export const DEFAULT_STATE: RuntimeState = {
   remainingMs: DEFAULT_SETTINGS.intervalMinutes * 60 * 1000,
   lastActiveAt: Date.now(),
   nextAlarmAt: null,
+  nextNotificationAt: null,
   lastNotifiedAt: null,
   activeNotificationId: null,
 };

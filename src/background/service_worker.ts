@@ -38,6 +38,7 @@ async function initializeExtension(): Promise<void> {
       remainingMs: DEFAULT_SETTINGS.intervalMinutes * 60 * 1000,
       lastActiveAt: Date.now(),
       nextAlarmAt: null,
+      nextNotificationAt: null,
       lastNotifiedAt: null,
       activeNotificationId: null,
     });
@@ -68,12 +69,12 @@ async function restoreState(): Promise<void> {
 
   if (remaining <= 0) {
     console.log('[Breakio] Interval elapsed during restart - showing reminder');
-    await setState({ remainingMs: settings.intervalMinutes * 60 * 1000, lastActiveAt: now });
+    await setState({ remainingMs: settings.intervalMinutes * 60 * 1000, lastActiveAt: now, nextNotificationAt: now });
     await showNotification();
     await scheduleReminder();
   } else {
     console.log(`[Breakio] State restored - ${remaining}ms remaining`);
-    await setState({ remainingMs: remaining, lastActiveAt: now });
+    await setState({ remainingMs: remaining });
     await scheduleReminder(remaining);
   }
 }
@@ -125,22 +126,15 @@ async function scheduleReminder(delayMs?: number): Promise<void> {
   const elapsed = Date.now() - state.lastActiveAt;
   const newRemainingMs = Math.max(0, requestedDelay - elapsed);
 
-  if (newRemainingMs <= 0) {
-    await showNotification();
-    await setState({
-      remainingMs: settings.intervalMinutes * 60 * 1000,
-      lastActiveAt: Date.now(),
-    });
-    await scheduleReminder();
-    return;
-  }
+  const nextNotificationTime = Date.now() + newRemainingMs;
 
   const nextAt = Date.now() + newRemainingMs;
-  await setState({ nextAlarmAt: nextAt, remainingMs: newRemainingMs });
+  await setState({ nextAlarmAt: nextAt, remainingMs: newRemainingMs, nextNotificationAt: nextNotificationTime });
 
   try {
     await chrome.alarms.clear(ALARM_NAME);
-    await chrome.alarms.create(ALARM_NAME, { delayInMinutes: newRemainingMs / 60000 });
+    const delayMinutes = Math.max(1, newRemainingMs / 60000);
+    await chrome.alarms.create(ALARM_NAME, { delayInMinutes: delayMinutes });
     console.log(`[Breakio] Alarm scheduled in ${Math.round(newRemainingMs / 1000)}s`);
   } catch (error) {
     console.error('[Breakio] Failed to schedule alarm:', error);
@@ -166,6 +160,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   await setState({
     remainingMs: settings.intervalMinutes * 60 * 1000,
     lastActiveAt: Date.now(),
+    nextNotificationAt: null,
   });
   await scheduleReminder();
 });
@@ -367,6 +362,47 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
           sendResponse({ success: true });
           break;
         }
+        case 'CHECK_NOTIFICATION': {
+          const { settings, state } = await getAll();
+          const now = Date.now();
+
+          if (state.isPaused || state.isIdle) {
+            sendResponse({ triggered: false, reason: 'paused or idle' });
+            break;
+          }
+
+          if (!state.nextNotificationAt || now < state.nextNotificationAt) {
+            sendResponse({ triggered: false, reason: 'not yet time' });
+            break;
+          }
+
+          if (state.activeNotificationId) {
+            try {
+              const notifications = await chrome.notifications.getAll();
+              if (notifications[state.activeNotificationId]) {
+                sendResponse({ triggered: false, reason: 'already shown' });
+                break;
+              }
+            } catch {
+              await setState({ activeNotificationId: null });
+            }
+          }
+
+          if (state.lastNotifiedAt && now - state.lastNotifiedAt < ANTI_SPAM_WINDOW_MS) {
+            sendResponse({ triggered: false, reason: 'anti-spam' });
+            break;
+          }
+
+          await showNotification();
+          await setState({
+            remainingMs: settings.intervalMinutes * 60 * 1000,
+            lastActiveAt: Date.now(),
+            nextNotificationAt: null,
+          });
+          await scheduleReminder();
+          sendResponse({ triggered: true });
+          break;
+        }
         case 'RESET': {
           await resetToDefaults();
           await initializeExtension();
@@ -391,6 +427,7 @@ async function resetToDefaults(): Promise<void> {
     remainingMs: DEFAULT_SETTINGS.intervalMinutes * 60 * 1000,
     lastActiveAt: Date.now(),
     nextAlarmAt: null,
+    nextNotificationAt: null,
     lastNotifiedAt: null,
     activeNotificationId: null,
   });

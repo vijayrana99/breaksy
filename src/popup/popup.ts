@@ -72,6 +72,7 @@ function startCountdown(): void {
     updateDisplay();
 
     if (displaySeconds <= 0) {
+      await sendMessage('CHECK_NOTIFICATION');
       await refreshState();
     }
   }, 1000);
