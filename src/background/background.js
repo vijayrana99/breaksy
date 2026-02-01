@@ -138,20 +138,33 @@ async function handleIdleStateChange(state) {
 
 async function scheduleReminder(delayMs) {
   const { settings, state } = await getAll();
-  const delay = delayMs ?? state.remainingMs;
+  const requestedDelay = delayMs ?? state.remainingMs;
 
-  if (state.isPaused || delay <= 0) {
+  if (state.isPaused || requestedDelay <= 0) {
     await clearAlarm();
     return;
   }
 
-  const nextAt = Date.now() + delay;
-  await setState({ nextAlarmAt: nextAt, remainingMs: delay });
+  const elapsed = Date.now() - state.lastActiveAt;
+  const newRemainingMs = Math.max(0, requestedDelay - elapsed);
+
+  if (newRemainingMs <= 0) {
+    await showNotification();
+    await setState({
+      remainingMs: settings.intervalMinutes * 60 * 1000,
+      lastActiveAt: Date.now(),
+    });
+    await scheduleReminder();
+    return;
+  }
+
+  const nextAt = Date.now() + newRemainingMs;
+  await setState({ nextAlarmAt: nextAt, remainingMs: newRemainingMs, lastActiveAt: Date.now() });
 
   try {
     await chrome.alarms.clear(ALARM_NAME);
-    await chrome.alarms.create(ALARM_NAME, { delayInMinutes: delay / 60000 });
-    console.log(`[Breakio] Alarm scheduled in ${Math.round(delay / 1000)}s`);
+    await chrome.alarms.create(ALARM_NAME, { delayInMinutes: newRemainingMs / 60000 });
+    console.log(`[Breakio] Alarm scheduled in ${Math.round(newRemainingMs / 1000)}s`);
   } catch (error) {
     console.error('[Breakio] Failed to schedule alarm:', error);
   }
