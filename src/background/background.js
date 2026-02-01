@@ -7,7 +7,7 @@ const DEFAULT_SETTINGS = {
   intervalMinutes: 20,
   breakDurationSeconds: 20,
   idleThresholdSeconds: 60,
-  snoozeMinutes: 5,
+  snoozeMinutes: 1,
 };
 
 const DEFAULT_STATE = {
@@ -204,7 +204,7 @@ async function showNotification() {
 
   const notificationId = `breakio-${Date.now()}`;
   const buttons = [
-    { title: `Snooze ${settings.snoozeMinutes} min` },
+    { title: 'Snooze 1 min' },
     { title: 'Pause' },
   ];
 
