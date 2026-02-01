@@ -44,17 +44,25 @@ function updateStatusDisplay(state: StateResponse): void {
 function startCountdown(): void {
   if (countdownInterval) clearInterval(countdownInterval);
 
+  let displaySeconds = currentState?.remainingSeconds ?? 0;
+
+  const updateDisplay = () => {
+    ELEMENTS.statusText.textContent = `Next break in: ${formatTime(displaySeconds)}`;
+  };
+
+  updateDisplay();
+
   countdownInterval = setInterval(async () => {
     if (!currentState) return;
 
-    const { state, settings, remainingSeconds } = currentState;
+    const { state } = currentState;
 
     if (state.isPaused || state.isIdle) return;
 
-    const newRemaining = Math.max(0, remainingSeconds - 1);
-    ELEMENTS.statusText.textContent = `Next break in: ${formatTime(newRemaining)}`;
+    displaySeconds = Math.max(0, displaySeconds - 1);
+    updateDisplay();
 
-    if (newRemaining <= 0) {
+    if (displaySeconds <= 0) {
       await refreshState();
     }
   }, 1000);
