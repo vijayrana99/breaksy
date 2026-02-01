@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Breakio",
+  "version": "1.0.0",
+  "description": "Healthy computer-use break reminders with push notifications",
+  "permissions": [
+    "alarms",
+    "notifications",
+    "storage",
+    "idle"
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "src/assets/icons/icon16.png",
+      "48": "src/assets/icons/icon48.png",
+      "128": "src/assets/icons/icon128.png"
+    }
+  },
+  "options_page": "src/options/options.html",
+  "background": {
+    "service_worker": "src/background/service_worker.js"
+  },
+  "icons": {
+    "16": "src/assets/icons/icon16.png",
+    "48": "src/assets/icons/icon48.png",
+    "128": "src/assets/icons/icon128.png"
+  }
+}
