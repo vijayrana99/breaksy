@@ -186,8 +186,12 @@ async function showNotification() {
 
   if (state.activeNotificationId) {
     try {
-      await chrome.notifications.getAll();
-      return;
+      const notifications = await chrome.notifications.getAll();
+      if (notifications[state.activeNotificationId]) {
+        console.log('[Breakio] Active notification already exists');
+        return;
+      }
+      await setState({ activeNotificationId: null });
     } catch {
       await setState({ activeNotificationId: null });
     }
