@@ -159,7 +159,7 @@ async function scheduleReminder(delayMs) {
   }
 
   const nextAt = Date.now() + newRemainingMs;
-  await setState({ nextAlarmAt: nextAt, remainingMs: newRemainingMs, lastActiveAt: Date.now() });
+  await setState({ nextAlarmAt: nextAt, remainingMs: newRemainingMs });
 
   try {
     await chrome.alarms.clear(ALARM_NAME);
