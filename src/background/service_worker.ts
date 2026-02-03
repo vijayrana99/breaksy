@@ -171,7 +171,9 @@ async function showNotification(): Promise<void> {
 
   if (state.activeNotificationId) {
     try {
-      const notifications = await chrome.notifications.getAll();
+      const notifications = await new Promise<{ [id: string]: chrome.notifications.NotificationOptions }>((resolve) => {
+        chrome.notifications.getAll((notifications) => resolve(notifications));
+      });
       if (notifications[state.activeNotificationId]) {
         console.log('[Breakio] Active notification already exists');
         return;
@@ -198,7 +200,7 @@ async function showNotification(): Promise<void> {
       type: 'basic',
       title: 'Time for an eye break 👀',
       message: `Look at something ~20 ft / 6 m away for ${settings.breakDurationSeconds} seconds.`,
-      iconUrl: 'src/assets/icon128.png',
+      iconUrl: chrome.runtime.getURL('src/assets/icon128.png'),
       buttons,
       requireInteraction: true,
     });
@@ -308,7 +310,10 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
       switch (message.type) {
         case 'GET_STATE': {
           const { settings, state } = await getAll();
-          const remainingSeconds = Math.max(0, Math.ceil(state.remainingMs / 1000));
+          const now = Date.now();
+          const elapsed = now - state.lastActiveAt;
+          const remainingMs = Math.max(0, state.remainingMs - elapsed);
+          const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
           sendResponse({
             settings,
             state,

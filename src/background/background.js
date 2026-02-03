@@ -7,7 +7,7 @@ const DEFAULT_SETTINGS = {
   intervalMinutes: 20,
   breakDurationSeconds: 20,
   idleThresholdSeconds: 60,
-  snoozeMinutes: 2,
+  snoozeMinutes: 1,
 };
 
 const DEFAULT_STATE = {
@@ -218,7 +218,7 @@ async function showNotification() {
 
   const notificationId = `breakio-${Date.now()}`;
   const buttons = [
-    { title: 'Snooze 2 min' },
+    { title: `Snooze ${settings.snoozeMinutes} min` },
     { title: 'Pause' },
   ];
 
@@ -227,7 +227,7 @@ async function showNotification() {
       type: 'basic',
       title: 'Time for an eye break 👀',
       message: `Look at something ~20 ft / 6 m away for ${settings.breakDurationSeconds} seconds.`,
-      iconUrl: 'src/assets/icon128.png',
+      iconUrl: chrome.runtime.getURL('src/assets/icon128.png'),
       buttons,
       requireInteraction: true,
     });
