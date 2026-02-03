@@ -10,6 +10,7 @@ export interface RuntimeState {
   isIdle: boolean;
   remainingMs: number;
   lastActiveAt: number;
+  timerEndsAt: number | null;
   nextAlarmAt: number | null;
   nextNotificationAt: number | null;
   lastNotifiedAt: number | null;
@@ -51,6 +52,7 @@ export const DEFAULT_STATE: RuntimeState = {
   isIdle: false,
   remainingMs: DEFAULT_SETTINGS.intervalMinutes * 60 * 1000,
   lastActiveAt: Date.now(),
+  timerEndsAt: null,
   nextAlarmAt: null,
   nextNotificationAt: null,
   lastNotifiedAt: null,

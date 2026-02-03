@@ -15,6 +15,7 @@ const DEFAULT_STATE = {
   isIdle: false,
   remainingMs: DEFAULT_SETTINGS.intervalMinutes * 60 * 1000,
   lastActiveAt: Date.now(),
+  timerEndsAt: null,
   nextAlarmAt: null,
   nextNotificationAt: null,
   lastNotifiedAt: null,
@@ -66,6 +67,7 @@ async function initializeExtension() {
       isIdle: false,
       remainingMs: DEFAULT_SETTINGS.intervalMinutes * 60 * 1000,
       lastActiveAt: Date.now(),
+      timerEndsAt: null,
       nextAlarmAt: null,
       nextNotificationAt: null,
       lastNotifiedAt: null,
@@ -93,17 +95,16 @@ async function restoreState() {
     return;
   }
 
-  const elapsed = now - state.lastActiveAt;
-  const remaining = Math.max(0, state.remainingMs - elapsed);
+  const remaining = state.timerEndsAt ? Math.max(0, state.timerEndsAt - now) : state.remainingMs;
 
   if (remaining <= 0) {
     console.log('[Breakio] Interval elapsed during restart - showing reminder');
-    await setState({ remainingMs: settings.intervalMinutes * 60 * 1000, lastActiveAt: now, nextNotificationAt: now });
+    const timerEndsAt = now + settings.intervalMinutes * 60 * 1000;
+    await setState({ remainingMs: settings.intervalMinutes * 60 * 1000, timerEndsAt, nextNotificationAt: now });
     await showNotification();
     await scheduleReminder();
   } else {
     console.log(`[Breakio] State restored - ${remaining}ms remaining`);
-    await setState({ remainingMs: remaining });
     await scheduleReminder(remaining);
   }
 }
@@ -122,8 +123,7 @@ async function handleIdleStateChange(state) {
   if (state === 'idle' || state === 'locked') {
     if (currentState.isPaused || currentState.isIdle) return;
 
-    const elapsed = Date.now() - currentState.lastActiveAt;
-    const remaining = Math.max(0, currentState.remainingMs - elapsed);
+    const remaining = currentState.timerEndsAt ? Math.max(0, currentState.timerEndsAt - Date.now()) : currentState.remainingMs;
 
     await setState({
       isIdle: true,
@@ -136,7 +136,6 @@ async function handleIdleStateChange(state) {
 
     await setState({
       isIdle: false,
-      lastActiveAt: Date.now(),
     });
     await scheduleReminder(currentState.remainingMs);
     console.log('[Breakio] Resumed after idle');
@@ -145,26 +144,35 @@ async function handleIdleStateChange(state) {
 
 async function scheduleReminder(delayMs) {
   const { settings, state } = await getAll();
-  const requestedDelay = delayMs ?? state.remainingMs;
+  const now = Date.now();
+  let delayToUse = delayMs;
+
+  if (!delayToUse && state.timerEndsAt) {
+    delayToUse = Math.max(0, state.timerEndsAt - now);
+  }
+
+  const requestedDelay = delayToUse ?? state.remainingMs;
 
   if (state.isPaused || requestedDelay <= 0) {
     await clearAlarm();
     return;
   }
 
-  const elapsed = Date.now() - state.lastActiveAt;
-  const newRemainingMs = Math.max(0, requestedDelay - elapsed);
+  const timerEndsAt = now + requestedDelay;
+  const nextNotificationTime = now + requestedDelay;
 
-  const nextNotificationTime = Date.now() + newRemainingMs;
-
-  const nextAt = Date.now() + newRemainingMs;
-  await setState({ nextAlarmAt: nextAt, remainingMs: newRemainingMs, nextNotificationAt: nextNotificationTime });
+  await setState({
+    timerEndsAt,
+    remainingMs: requestedDelay,
+    nextAlarmAt: timerEndsAt,
+    nextNotificationAt: nextNotificationTime,
+  });
 
   try {
     await chrome.alarms.clear(ALARM_NAME);
-    const delayMinutes = Math.max(1, newRemainingMs / 60000);
+    const delayMinutes = Math.max(1, requestedDelay / 60000);
     await chrome.alarms.create(ALARM_NAME, { delayInMinutes: delayMinutes });
-    console.log(`[Breakio] Alarm scheduled in ${Math.round(newRemainingMs / 1000)}s`);
+    console.log(`[Breakio] Alarm scheduled in ${Math.round(requestedDelay / 1000)}s`);
   } catch (error) {
     console.error('[Breakio] Failed to schedule alarm:', error);
   }
@@ -186,9 +194,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 
   await showNotification();
+  const timerEndsAt = Date.now() + settings.intervalMinutes * 60 * 1000;
   await setState({
     remainingMs: settings.intervalMinutes * 60 * 1000,
-    lastActiveAt: Date.now(),
+    timerEndsAt,
     nextNotificationAt: null,
   });
   await scheduleReminder();
@@ -270,11 +279,12 @@ chrome.notifications.onClosed.addListener(async (notificationId, byUser) => {
 async function handleSnooze() {
   const { settings } = await getAll();
   const snoozeMs = settings.snoozeMinutes * 60 * 1000;
+  const timerEndsAt = Date.now() + snoozeMs;
 
   await setState({
     activeNotificationId: null,
     remainingMs: snoozeMs,
-    lastActiveAt: Date.now(),
+    timerEndsAt,
   });
   await scheduleReminder(snoozeMs);
   console.log(`[Breakio] Snoozed for ${settings.snoozeMinutes} min`);
@@ -305,9 +315,10 @@ async function handleResume() {
   await setState({ isPaused: false });
 
   if (state.remainingMs <= 0) {
+    const timerEndsAt = Date.now() + settings.intervalMinutes * 60 * 1000;
     await setState({
       remainingMs: settings.intervalMinutes * 60 * 1000,
-      lastActiveAt: Date.now(),
+      timerEndsAt,
     });
   }
 
@@ -325,11 +336,12 @@ async function handleTakeBreakNow() {
     return;
   }
 
+  const timerEndsAt = Date.now() + settings.intervalMinutes * 60 * 1000;
   await setState({
     activeNotificationId: null,
     lastNotifiedAt: null,
     remainingMs: settings.intervalMinutes * 60 * 1000,
-    lastActiveAt: Date.now(),
+    timerEndsAt,
   });
   await showNotification();
   console.log('[Breakio] Take Break Now triggered');
@@ -342,7 +354,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       switch (message.type) {
         case 'GET_STATE': {
           const { settings, state } = await getAll();
-          const remainingSeconds = Math.max(0, Math.ceil(state.remainingMs / 1000));
+          const now = Date.now();
+          const remainingMs = state.timerEndsAt ? Math.max(0, state.timerEndsAt - now) : state.remainingMs;
+          const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
           sendResponse({ settings, state, remainingSeconds });
           break;
         }
@@ -352,7 +366,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           await setSettings({ intervalMinutes: interval });
           const { state } = await getAll();
           if (!state.isPaused && !state.isIdle) {
-            await setState({ remainingMs: interval * 60 * 1000, lastActiveAt: Date.now() });
+            const timerEndsAt = Date.now() + interval * 60 * 1000;
+            await setState({ remainingMs: interval * 60 * 1000, timerEndsAt });
             await scheduleReminder();
           }
           sendResponse({ success: true });
@@ -424,9 +439,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
 
           await showNotification();
+          const timerEndsAt = now + settings.intervalMinutes * 60 * 1000;
           await setState({
             remainingMs: settings.intervalMinutes * 60 * 1000,
-            lastActiveAt: Date.now(),
+            timerEndsAt,
             nextNotificationAt: null,
           });
           await scheduleReminder();
@@ -440,6 +456,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             isIdle: false,
             remainingMs: DEFAULT_SETTINGS.intervalMinutes * 60 * 1000,
             lastActiveAt: Date.now(),
+            timerEndsAt: null,
             nextAlarmAt: null,
             nextNotificationAt: null,
             lastNotifiedAt: null,
