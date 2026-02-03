@@ -93,6 +93,7 @@ async function refreshState(): Promise<void> {
     ELEMENTS.intervalCustom.value = response.settings.intervalMinutes.toString();
     ELEMENTS.intervalCustom.classList.toggle('hidden', PRESET_INTERVALS.includes(response.settings.intervalMinutes));
     ELEMENTS.breakDuration.value = response.settings.breakDurationSeconds.toString();
+    ELEMENTS.statusSubtext.textContent = '';
   } catch (error) {
     console.error('[Popup] Failed to refresh state:', error);
     ELEMENTS.statusText.textContent = 'Error';
@@ -123,13 +124,20 @@ function setupEventListeners(): void {
     }
   });
 
-  ELEMENTS.intervalCustom.addEventListener('change', async () => {
+  const handleIntervalCustomChange = async () => {
     const value = parseInt(ELEMENTS.intervalCustom.value, 10);
     if (value >= 1 && value <= 240) {
       await sendMessage('SET_INTERVAL', { interval: value });
       ELEMENTS.intervalSelect.value = 'custom';
+      ELEMENTS.statusSubtext.textContent = '';
+    } else {
+      ELEMENTS.statusSubtext.textContent = 'Interval must be between 1 and 240 minutes';
+      ELEMENTS.intervalCustom.value = currentState?.settings.intervalMinutes.toString() || '20';
     }
-  });
+  };
+
+  ELEMENTS.intervalCustom.addEventListener('change', handleIntervalCustomChange);
+  ELEMENTS.intervalCustom.addEventListener('blur', handleIntervalCustomChange);
 
   ELEMENTS.breakDuration.addEventListener('change', async () => {
     const value = parseInt(ELEMENTS.breakDuration.value, 10);
