@@ -41,7 +41,7 @@ export interface StateResponse {
 export const DEFAULT_SETTINGS: Settings = {
   intervalMinutes: 20,
   idleThresholdSeconds: 60,
-  snoozeMinutes: 1,
+  snoozeMinutes: 5,
 };
 
 export const DEFAULT_STATE: RuntimeState = {
@@ -57,7 +57,7 @@ export const DEFAULT_STATE: RuntimeState = {
 };
 
 export const PRESET_INTERVALS = [20, 30, 45, 60, 90, 120];
-export const MIN_INTERVAL = 1;
+export const MIN_INTERVAL = 5;
 export const MAX_INTERVAL = 240;
 export const MIN_IDLE_THRESHOLD = 15;
 export const MAX_IDLE_THRESHOLD = 600;

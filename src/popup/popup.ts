@@ -1,4 +1,4 @@
-import { PRESET_INTERVALS, StateResponse, Message, MessageType } from '../shared/types';
+import { PRESET_INTERVALS, MIN_INTERVAL, MAX_INTERVAL, StateResponse, Message, MessageType } from '../shared/types';
 
 const ELEMENTS = {
   statusText: document.getElementById('status-text') as HTMLElement,
@@ -124,12 +124,12 @@ function setupEventListeners(): void {
 
   const handleIntervalCustomChange = async () => {
     const value = parseInt(ELEMENTS.intervalCustom.value, 10);
-    if (value >= 1 && value <= 240) {
+    if (value >= MIN_INTERVAL && value <= MAX_INTERVAL) {
       await sendMessage('SET_INTERVAL', { interval: value });
       ELEMENTS.intervalSelect.value = 'custom';
       ELEMENTS.statusSubtext.textContent = '';
     } else {
-      ELEMENTS.statusSubtext.textContent = 'Interval must be between 1 and 240 minutes';
+      ELEMENTS.statusSubtext.textContent = `Interval must be between ${MIN_INTERVAL} and ${MAX_INTERVAL} minutes`;
       ELEMENTS.intervalCustom.value = currentState?.settings.intervalMinutes.toString() || '20';
     }
   };
