@@ -6,7 +6,7 @@ const STORAGE_KEYS = {
 const DEFAULT_SETTINGS = {
   intervalMinutes: 20,
   idleThresholdSeconds: 60,
-  snoozeMinutes: 1,
+  snoozeMinutes: 5,
 };
 
 const DEFAULT_STATE = {
