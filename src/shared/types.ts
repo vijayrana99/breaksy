@@ -64,5 +64,5 @@ export const MAX_IDLE_THRESHOLD = 600;
 export const MIN_SNOOZE = 1;
 export const MAX_SNOOZE = 60;
 export const ANTI_SPAM_WINDOW_MS = 60000;
-export const ALARM_NAME = 'breakio-reminder';
+export const ALARM_NAME = 'breaksy-reminder';
 export const IDLE_CHECK_INTERVAL = 30;

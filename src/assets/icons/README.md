@@ -1,4 +1,4 @@
-# Icon Placeholders for Breakio
+# Icon Placeholders for Breaksy
 
 This directory contains placeholder instructions for extension icons.
 

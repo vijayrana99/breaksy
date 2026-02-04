@@ -13,13 +13,13 @@ import { getSettings, setSettings, getState, setState, getAll } from '../shared/
 let idleListenerAdded = false;
 
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('[Breakio] Extension installed');
+  console.log('[Breaksy] Extension installed');
   await initializeExtension();
   setupIdleListener();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  console.log('[Breakio] Extension startup');
+  console.log('[Breaksy] Extension startup');
   await restoreState();
   setupIdleListener();
 });
@@ -46,7 +46,7 @@ async function initializeExtension(): Promise<void> {
   }
 
   await scheduleReminder();
-  console.log('[Breakio] Initialized with defaults');
+  console.log('[Breaksy] Initialized with defaults');
 }
 
 async function restoreState(): Promise<void> {
@@ -54,13 +54,13 @@ async function restoreState(): Promise<void> {
   const now = Date.now();
 
   if (state.isPaused) {
-    console.log('[Breakio] State restored - currently paused');
+    console.log('[Breaksy] State restored - currently paused');
     await clearAlarm();
     return;
   }
 
   if (state.isIdle) {
-    console.log('[Breakio] State restored - currently idle');
+    console.log('[Breaksy] State restored - currently idle');
     await scheduleReminder(state.remainingMs);
     return;
   }
@@ -68,13 +68,13 @@ async function restoreState(): Promise<void> {
   const remaining = state.timerEndsAt ? Math.max(0, state.timerEndsAt - now) : state.remainingMs;
 
   if (remaining <= 0) {
-    console.log('[Breakio] Interval elapsed during restart - showing reminder');
+    console.log('[Breaksy] Interval elapsed during restart - showing reminder');
     const timerEndsAt = now + settings.intervalMinutes * 60 * 1000;
     await setState({ remainingMs: settings.intervalMinutes * 60 * 1000, timerEndsAt, nextNotificationAt: now });
     await showNotification();
     await scheduleReminder();
   } else {
-    console.log(`[Breakio] State restored - ${remaining}ms remaining`);
+    console.log(`[Breaksy] State restored - ${remaining}ms remaining`);
     await scheduleReminder(remaining);
   }
 }
@@ -83,12 +83,12 @@ function setupIdleListener(): void {
   if (idleListenerAdded) return;
   idleListenerAdded = true;
   chrome.idle.onStateChanged.addListener(handleIdleStateChange);
-  console.log('[Breakio] Idle listener registered');
+  console.log('[Breaksy] Idle listener registered');
 }
 
 async function handleIdleStateChange(state: chrome.idle.IdleState): Promise<void> {
   const { settings, state: currentState } = await getAll();
-  console.log(`[Breakio] Idle state changed: ${state}`);
+  console.log(`[Breaksy] Idle state changed: ${state}`);
 
   if (state === 'idle' || state === 'locked') {
     if (currentState.isPaused || currentState.isIdle) return;
@@ -100,7 +100,7 @@ async function handleIdleStateChange(state: chrome.idle.IdleState): Promise<void
       remainingMs: remaining,
     });
     await clearAlarm();
-    console.log(`[Breakio] Paused due to idle - ${remaining}ms remaining`);
+    console.log(`[Breaksy] Paused due to idle - ${remaining}ms remaining`);
   } else if (state === 'active') {
     if (!currentState.isIdle || currentState.isPaused) return;
 
@@ -108,7 +108,7 @@ async function handleIdleStateChange(state: chrome.idle.IdleState): Promise<void
       isIdle: false,
     });
     await scheduleReminder(currentState.remainingMs);
-    console.log('[Breakio] Resumed after idle');
+    console.log('[Breaksy] Resumed after idle');
   }
 }
 
@@ -142,9 +142,9 @@ async function scheduleReminder(delayMs?: number): Promise<void> {
     await chrome.alarms.clear(ALARM_NAME);
     const delayMinutes = Math.max(1, requestedDelay / 60000);
     await chrome.alarms.create(ALARM_NAME, { delayInMinutes: delayMinutes });
-    console.log(`[Breakio] Alarm scheduled in ${Math.round(requestedDelay / 1000)}s`);
+    console.log(`[Breaksy] Alarm scheduled in ${Math.round(requestedDelay / 1000)}s`);
   } catch (error) {
-    console.error('[Breakio] Failed to schedule alarm:', error);
+    console.error('[Breaksy] Failed to schedule alarm:', error);
   }
 }
 
@@ -155,11 +155,11 @@ async function clearAlarm(): Promise<void> {
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== ALARM_NAME) return;
-  console.log('[Breakio] Alarm triggered');
+  console.log('[Breaksy] Alarm triggered');
 
   const { settings, state } = await getAll();
   if (state.isPaused || state.isIdle) {
-    console.log('[Breakio] Ignoring alarm - paused or idle');
+    console.log('[Breaksy] Ignoring alarm - paused or idle');
     return;
   }
 
@@ -183,7 +183,7 @@ async function showNotification(): Promise<void> {
         chrome.notifications.getAll((notifications) => resolve(notifications));
       });
       if (notifications[state.activeNotificationId]) {
-        console.log('[Breakio] Active notification already exists');
+        console.log('[Breaksy] Active notification already exists');
         return;
       }
       await setState({ activeNotificationId: null });
@@ -193,11 +193,11 @@ async function showNotification(): Promise<void> {
   }
 
   if (state.lastNotifiedAt && now - state.lastNotifiedAt < ANTI_SPAM_WINDOW_MS) {
-    console.log('[Breakio] Skipping notification - within anti-spam window');
+    console.log('[Breaksy] Skipping notification - within anti-spam window');
     return;
   }
 
-  const notificationId = `breakio-${Date.now()}`;
+  const notificationId = `breaksy-${Date.now()}`;
   const buttons: chrome.notifications.ButtonOptions[] = [
     { title: `Snooze ${settings.snoozeMinutes} min` },
     { title: 'Pause' },
@@ -217,9 +217,9 @@ async function showNotification(): Promise<void> {
       activeNotificationId: notificationId,
       lastNotifiedAt: now,
     });
-    console.log('[Breakio] Notification shown');
+    console.log('[Breaksy] Notification shown');
   } catch (error) {
-    console.error('[Breakio] Failed to show notification:', error);
+    console.error('[Breaksy] Failed to show notification:', error);
   }
 }
 
@@ -259,7 +259,7 @@ async function handleSnooze(): Promise<void> {
     timerEndsAt,
   });
   await scheduleReminder(snoozeMs);
-  console.log(`[Breakio] Snoozed for ${settings.snoozeMinutes} min`);
+  console.log(`[Breaksy] Snoozed for ${settings.snoozeMinutes} min`);
 }
 
 async function handlePauseToggle(): Promise<void> {
@@ -278,7 +278,7 @@ async function handlePause(): Promise<void> {
     activeNotificationId: null,
   });
   await clearAlarm();
-  console.log('[Breakio] Paused');
+  console.log('[Breaksy] Paused');
 }
 
 async function handleResume(): Promise<void> {
@@ -297,20 +297,20 @@ async function handleResume(): Promise<void> {
   if (!state.isIdle) {
     await scheduleReminder();
   }
-  console.log('[Breakio] Resumed');
+  console.log('[Breaksy] Resumed');
 }
 
 async function handleTakeBreakNow(): Promise<void> {
   const { settings, state } = await getAll();
 
   if (state.lastNotifiedAt && Date.now() - state.lastNotifiedAt < ANTI_SPAM_WINDOW_MS) {
-    console.log('[Breakio] Take Break Now ignored - within anti-spam window');
+    console.log('[Breaksy] Take Break Now ignored - within anti-spam window');
     return;
   }
 
   await setState({ activeNotificationId: null, lastNotifiedAt: null });
   await showNotification();
-  console.log('[Breakio] Take Break Now triggered');
+  console.log('[Breaksy] Take Break Now triggered');
 }
 
 chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
@@ -420,7 +420,7 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
         }
       }
     } catch (error) {
-      console.error('[Breakio] Message handler error:', error);
+      console.error('[Breaksy] Message handler error:', error);
       sendResponse({ error: String(error) });
     }
   })();
@@ -443,4 +443,4 @@ async function resetToDefaults(): Promise<void> {
   });
 }
 
-console.log('[Breakio] Service worker loaded');
+console.log('[Breaksy] Service worker loaded');

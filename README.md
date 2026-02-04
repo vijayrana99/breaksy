@@ -1,4 +1,4 @@
-# Breakio
+# Breaksy
 
 Healthy computer-use break reminders with push notifications.
 
@@ -19,10 +19,10 @@ Healthy computer-use break reminders with push notifications.
 ### Installation
 
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/breaksy.git
-   cd breaksy
-   ```
+    ```bash
+    git clone https://github.com/yourusername/breaksy.git
+    cd breaksy
+    ```
 
 2. Install dependencies:
    ```bash

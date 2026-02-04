@@ -1,8 +1,8 @@
 import { Settings, RuntimeState, DEFAULT_SETTINGS, DEFAULT_STATE } from './types';
 
 const STORAGE_KEYS = {
-  SETTINGS: 'breakio-settings',
-  STATE: 'breakio-state',
+  SETTINGS: 'breaksy-settings',
+  STATE: 'breaksy-state',
 } as const;
 
 export async function getSettings(): Promise<Settings> {

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Breakio",
+  "name": "Breaksy",
   "version": "1.0.0",
   "description": "Healthy computer-use break reminders with push notifications",
   "permissions": [
