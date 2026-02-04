@@ -1,6 +1,5 @@
 export interface Settings {
   intervalMinutes: number;
-  breakDurationSeconds: number;
   idleThresholdSeconds: number;
   snoozeMinutes: number;
 }
@@ -25,7 +24,6 @@ export interface Message {
 export type MessageType =
   | 'GET_STATE'
   | 'SET_INTERVAL'
-  | 'SET_BREAK_DURATION'
   | 'SET_SNOOZE'
   | 'TOGGLE_PAUSE'
   | 'TAKE_BREAK_NOW'
@@ -42,7 +40,6 @@ export interface StateResponse {
 
 export const DEFAULT_SETTINGS: Settings = {
   intervalMinutes: 20,
-  breakDurationSeconds: 20,
   idleThresholdSeconds: 60,
   snoozeMinutes: 1,
 };
@@ -62,8 +59,6 @@ export const DEFAULT_STATE: RuntimeState = {
 export const PRESET_INTERVALS = [20, 30, 45, 60, 90, 120];
 export const MIN_INTERVAL = 1;
 export const MAX_INTERVAL = 240;
-export const MIN_BREAK_DURATION = 5;
-export const MAX_BREAK_DURATION = 300;
 export const MIN_IDLE_THRESHOLD = 15;
 export const MAX_IDLE_THRESHOLD = 600;
 export const MIN_SNOOZE = 1;

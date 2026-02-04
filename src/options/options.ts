@@ -2,8 +2,6 @@ import {
   PRESET_INTERVALS,
   MIN_INTERVAL,
   MAX_INTERVAL,
-  MIN_BREAK_DURATION,
-  MAX_BREAK_DURATION,
   MIN_IDLE_THRESHOLD,
   MAX_IDLE_THRESHOLD,
   MIN_SNOOZE,
@@ -14,7 +12,6 @@ import {
 const ELEMENTS = {
   intervalPreset: document.getElementById('interval-preset') as HTMLSelectElement,
   intervalCustom: document.getElementById('interval-custom') as HTMLInputElement,
-  breakDuration: document.getElementById('break-duration') as HTMLInputElement,
   idleThreshold: document.getElementById('idle-threshold') as HTMLInputElement,
   snoozeDuration: document.getElementById('snooze-duration') as HTMLInputElement,
   btnReset: document.getElementById('btn-reset') as HTMLButtonElement,
@@ -22,10 +19,9 @@ const ELEMENTS = {
 
 async function loadSettings(): Promise<void> {
   try {
-    const response = await browser.runtime.sendMessage({ type: 'GET_STATE' }) as {
+    const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' }) as {
       settings: {
         intervalMinutes: number;
-        breakDurationSeconds: number;
         idleThresholdSeconds: number;
         snoozeMinutes: number;
       };
@@ -37,7 +33,6 @@ async function loadSettings(): Promise<void> {
       : 'custom';
     ELEMENTS.intervalCustom.value = settings.intervalMinutes.toString();
     ELEMENTS.intervalCustom.classList.toggle('hidden', PRESET_INTERVALS.includes(settings.intervalMinutes));
-    ELEMENTS.breakDuration.value = settings.breakDurationSeconds.toString();
     ELEMENTS.idleThreshold.value = settings.idleThresholdSeconds.toString();
     ELEMENTS.snoozeDuration.value = settings.snoozeMinutes.toString();
   } catch (error) {
@@ -47,7 +42,7 @@ async function loadSettings(): Promise<void> {
 
 async function sendMessage(type: string, payload?: Record<string, unknown>): Promise<void> {
   try {
-    await browser.runtime.sendMessage({ type, payload } as Message);
+    await chrome.runtime.sendMessage({ type, payload } as Message);
   } catch (error) {
     console.error(`Failed to send message ${type}:`, error);
   }
@@ -77,15 +72,6 @@ function setupEventListeners(): void {
       ELEMENTS.intervalCustom.value = ELEMENTS.intervalPreset.value !== 'custom'
         ? ELEMENTS.intervalPreset.value
         : '20';
-    }
-  });
-
-  ELEMENTS.breakDuration.addEventListener('change', async () => {
-    const value = parseInt(ELEMENTS.breakDuration.value, 10);
-    if (value >= MIN_BREAK_DURATION && value <= MAX_BREAK_DURATION) {
-      await sendMessage('SET_BREAK_DURATION', { duration: value });
-    } else {
-      ELEMENTS.breakDuration.value = '20';
     }
   });
 

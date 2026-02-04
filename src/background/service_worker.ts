@@ -207,7 +207,7 @@ async function showNotification(): Promise<void> {
     await chrome.notifications.create(notificationId, {
       type: 'basic',
       title: 'Time for an eye break 👀',
-      message: `Look at something ~20 ft / 6 m away for ${settings.breakDurationSeconds} seconds.`,
+      message: `Look at something ~20 ft / 6 m away for 20 seconds.`,
       iconUrl: chrome.runtime.getURL('src/assets/icon128.png'),
       buttons,
       requireInteraction: true,
@@ -340,13 +340,6 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
             await setState({ remainingMs: interval * 60 * 1000, timerEndsAt });
             await scheduleReminder();
           }
-          sendResponse({ success: true });
-          break;
-        }
-        case 'SET_BREAK_DURATION': {
-          const duration = message.payload?.duration as number;
-          if (typeof duration !== 'number') return;
-          await setSettings({ breakDurationSeconds: duration });
           sendResponse({ success: true });
           break;
         }

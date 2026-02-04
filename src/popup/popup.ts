@@ -7,7 +7,6 @@ const ELEMENTS = {
   statusSubtext: document.getElementById('status-subtext') as HTMLElement,
   intervalSelect: document.getElementById('interval-select') as HTMLSelectElement,
   intervalCustom: document.getElementById('interval-custom') as HTMLInputElement,
-  breakDuration: document.getElementById('break-duration') as HTMLInputElement,
   btnTakeBreak: document.getElementById('btn-take-break') as HTMLButtonElement,
   btnSnooze: document.getElementById('btn-snooze') as HTMLButtonElement,
   btnPause: document.getElementById('btn-pause') as HTMLButtonElement,
@@ -92,7 +91,6 @@ async function refreshState(): Promise<void> {
       : 'custom';
     ELEMENTS.intervalCustom.value = response.settings.intervalMinutes.toString();
     ELEMENTS.intervalCustom.classList.toggle('hidden', PRESET_INTERVALS.includes(response.settings.intervalMinutes));
-    ELEMENTS.breakDuration.value = response.settings.breakDurationSeconds.toString();
     ELEMENTS.statusSubtext.textContent = '';
   } catch (error) {
     console.error('[Popup] Failed to refresh state:', error);
@@ -138,15 +136,6 @@ function setupEventListeners(): void {
 
   ELEMENTS.intervalCustom.addEventListener('change', handleIntervalCustomChange);
   ELEMENTS.intervalCustom.addEventListener('blur', handleIntervalCustomChange);
-
-  ELEMENTS.breakDuration.addEventListener('change', async () => {
-    const value = parseInt(ELEMENTS.breakDuration.value, 10);
-    if (value >= 5 && value <= 300) {
-      await sendMessage('SET_BREAK_DURATION', { duration: value });
-    } else {
-      ELEMENTS.breakDuration.value = currentState?.settings.breakDurationSeconds.toString() || '20';
-    }
-  });
 
   ELEMENTS.btnTakeBreak.addEventListener('click', async () => {
     await sendMessage('TAKE_BREAK_NOW');
