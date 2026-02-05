@@ -7,6 +7,7 @@ import {
   Message,
   StateResponse,
   getActionButtonText,
+  DEFAULT_SETTINGS_V2,
 } from '../shared/types';
 
 // ============================================================================
@@ -14,30 +15,23 @@ import {
 // ============================================================================
 
 const ELEMENTS = {
-  // Reminder type selector
-  reminderTypeSelect: document.getElementById('reminder-type-select') as HTMLSelectElement,
+  // Segmented control
+  segmentEye: document.getElementById('segment-eye') as HTMLButtonElement,
+  segmentWater: document.getElementById('segment-water') as HTMLButtonElement,
   
   // Status display
-  statusLabel: document.getElementById('status-label') as HTMLElement,
+  statusWord: document.getElementById('status-word') as HTMLElement,
   statusTime: document.getElementById('status-time') as HTMLElement,
-  statusSubtext: document.getElementById('status-subtext') as HTMLElement,
-  statusCard: document.getElementById('status-card') as HTMLElement,
-  
-  // Interval controls
-  intervalSelect: document.getElementById('interval-select') as HTMLSelectElement,
-  intervalCustom: document.getElementById('interval-custom') as HTMLInputElement,
+  statusSuffix: document.getElementById('status-suffix') as HTMLElement,
   
   // Buttons
   btnTrigger: document.getElementById('btn-trigger') as HTMLButtonElement,
   btnSnooze: document.getElementById('btn-snooze') as HTMLButtonElement,
   btnPause: document.getElementById('btn-pause') as HTMLButtonElement,
   
-  // Status indicators
-  statusIndicators: document.getElementById('status-indicators') as HTMLElement,
-  indicatorEye: document.getElementById('indicator-eye') as HTMLElement,
-  indicatorWater: document.getElementById('indicator-water') as HTMLElement,
-  statusEye: document.getElementById('status-eye') as HTMLElement,
-  statusWater: document.getElementById('status-water') as HTMLElement,
+  // Interval controls
+  intervalSelect: document.getElementById('interval-select') as HTMLSelectElement,
+  intervalCustom: document.getElementById('interval-custom') as HTMLInputElement,
   
   // Footer
   linkSettings: document.getElementById('link-settings') as HTMLAnchorElement,
@@ -50,19 +44,28 @@ const ELEMENTS = {
 let currentState: StateResponse | null = null;
 let currentReminderType: ReminderType = 'eye';
 let countdownInterval: ReturnType<typeof setInterval> | null = null;
-let displaySecondsByType: Record<ReminderType, number> = { eye: 0, water: 0 };
+let displaySeconds: number = 0;
+let isLoading: boolean = true;
 
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
 
 async function init(): Promise<void> {
+  showLoadingState();
   await refreshState();
   setupEventListeners();
   startCountdown();
+  isLoading = false;
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+function showLoadingState(): void {
+  ELEMENTS.statusTime.textContent = '--:--';
+  ELEMENTS.statusWord.textContent = 'Loading...';
+  ELEMENTS.statusSuffix.classList.add('hidden');
+}
 
 // ============================================================================
 // STATE MANAGEMENT
@@ -74,29 +77,49 @@ async function refreshState(): Promise<void> {
     const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' }) as StateResponse;
     console.log('[Popup] Received state:', response);
     
+    // Validate response has required properties
+    if (!response || !response.settings || !response.state) {
+      console.error('[Popup] Invalid state response:', response);
+      showErrorState('Invalid state');
+      return;
+    }
+    
+    // Ensure reminders object exists
+    if (!response.state.reminders) {
+      console.error('[Popup] State missing reminders:', response.state);
+      showErrorState('Initializing...');
+      // Try to refresh after a short delay
+      setTimeout(refreshState, 500);
+      return;
+    }
+    
     currentState = response;
     
     // Determine which reminder type to show
-    const savedType = response.settings.ui?.lastSelectedReminder;
+    const savedType = response.settings?.ui?.lastSelectedReminder;
     if (savedType && REMINDER_TYPES.includes(savedType)) {
       currentReminderType = savedType;
     } else {
       currentReminderType = 'eye';
     }
     
-    // Update display seconds for each type
-    for (const type of REMINDER_TYPES) {
-      displaySecondsByType[type] = response.remainingSecondsByType[type] ?? 0;
-    }
+    // Update display seconds for selected type
+    const seconds = response.remainingSecondsByType?.[currentReminderType];
+    displaySeconds = typeof seconds === 'number' ? seconds : 0;
     
     // Update UI
     updateUI();
     
   } catch (error) {
     console.error('[Popup] Failed to refresh state:', error);
-    ELEMENTS.statusTime.textContent = 'Error';
-    ELEMENTS.statusSubtext.textContent = String(error);
+    showErrorState(String(error));
   }
+}
+
+function showErrorState(message: string): void {
+  ELEMENTS.statusTime.textContent = 'Error';
+  ELEMENTS.statusWord.textContent = message;
+  ELEMENTS.statusSuffix.classList.add('hidden');
 }
 
 // ============================================================================
@@ -104,19 +127,100 @@ async function refreshState(): Promise<void> {
 // ============================================================================
 
 function updateUI(): void {
-  if (!currentState) return;
+  if (!currentState || isLoading) return;
   
-  const { settings, state } = currentState;
+  // Safely get settings and state with defaults
+  const settings = currentState.settings || DEFAULT_SETTINGS_V2;
+  const state = currentState.state || { version: 2, isIdle: false, lastActiveAt: Date.now(), reminders: {} };
   
-  // Update reminder type selector
-  ELEMENTS.reminderTypeSelect.value = currentReminderType;
+  // Ensure reminders object exists
+  if (!state.reminders) {
+    state.reminders = {} as typeof state.reminders;
+  }
   
-  // Update status display for selected reminder
-  updateStatusDisplay(currentReminderType);
+  // Safely get reminder-specific settings with defaults
+  const reminderSettings = settings.reminders?.[currentReminderType] || {
+    enabled: currentReminderType === 'eye',
+    intervalMinutes: currentReminderType === 'eye' ? 20 : 60,
+    snoozeMinutes: currentReminderType === 'eye' ? 5 : 10,
+    title: '',
+    message: ''
+  };
+  
+  // Safely get reminder-specific state with defaults
+  const reminderState = state.reminders?.[currentReminderType] || {
+    isPaused: false,
+    remainingMs: reminderSettings.intervalMinutes * 60 * 1000,
+    timerEndsAt: null,
+    nextAlarmAt: null,
+    nextNotificationAt: null,
+    lastNotifiedAt: null,
+    activeNotificationId: null
+  };
+  
+  // Update segmented control
+  updateSegmentedControl();
+  
+  // Update status display
+  updateStatusDisplay(settings, state, reminderSettings, reminderState);
   
   // Update interval selector
-  const reminderSettings = settings.reminders[currentReminderType];
-  const interval = reminderSettings.intervalMinutes;
+  updateIntervalSelector(reminderSettings.intervalMinutes);
+  
+  // Update button labels
+  updateButtons(reminderSettings, reminderState, state.isIdle);
+}
+
+function updateSegmentedControl(): void {
+  // Update eye segment
+  if (currentReminderType === 'eye') {
+    ELEMENTS.segmentEye.classList.add('active');
+    ELEMENTS.segmentWater.classList.remove('active');
+  } else {
+    ELEMENTS.segmentEye.classList.remove('active');
+    ELEMENTS.segmentWater.classList.add('active');
+  }
+}
+
+function updateStatusDisplay(
+  _settings: StateResponse['settings'],
+  state: StateResponse['state'],
+  reminderSettings: { enabled: boolean },
+  reminderState: { isPaused: boolean }
+): void {
+  // Clear previous status classes
+  ELEMENTS.statusWord.className = 'status-word';
+  
+  if (!reminderSettings.enabled) {
+    // Disabled state
+    ELEMENTS.statusWord.textContent = 'Disabled';
+    ELEMENTS.statusWord.classList.add('status-disabled');
+    ELEMENTS.statusTime.textContent = '--:--';
+    ELEMENTS.statusSuffix.classList.add('hidden');
+  } else if (state.isIdle) {
+    // Idle state
+    ELEMENTS.statusWord.textContent = 'Idle';
+    ELEMENTS.statusWord.classList.add('status-idle');
+    ELEMENTS.statusTime.textContent = formatTime(displaySeconds);
+    ELEMENTS.statusSuffix.classList.remove('hidden');
+    ELEMENTS.statusSuffix.textContent = 'remaining';
+  } else if (reminderState.isPaused) {
+    // Paused state
+    ELEMENTS.statusWord.textContent = 'Paused';
+    ELEMENTS.statusWord.classList.add('status-paused');
+    ELEMENTS.statusTime.textContent = formatTime(displaySeconds);
+    ELEMENTS.statusSuffix.classList.remove('hidden');
+    ELEMENTS.statusSuffix.textContent = 'remaining';
+  } else {
+    // Active state
+    ELEMENTS.statusWord.textContent = '';
+    ELEMENTS.statusTime.textContent = formatTime(displaySeconds);
+    ELEMENTS.statusSuffix.classList.remove('hidden');
+    ELEMENTS.statusSuffix.textContent = 'remaining';
+  }
+}
+
+function updateIntervalSelector(interval: number): void {
   if (PRESET_INTERVALS.includes(interval)) {
     ELEMENTS.intervalSelect.value = interval.toString();
     ELEMENTS.intervalCustom.classList.add('hidden');
@@ -125,84 +229,23 @@ function updateUI(): void {
     ELEMENTS.intervalCustom.value = interval.toString();
     ELEMENTS.intervalCustom.classList.remove('hidden');
   }
-  
-  // Update button labels
+}
+
+function updateButtons(
+  reminderSettings: { snoozeMinutes: number },
+  reminderState: { isPaused: boolean },
+  isIdle: boolean
+): void {
+  // Update trigger button text
   const actionText = getActionButtonText(currentReminderType);
   ELEMENTS.btnTrigger.textContent = actionText.trigger;
+  
+  // Update snooze button
   ELEMENTS.btnSnooze.textContent = `Snooze ${reminderSettings.snoozeMinutes} min`;
   
   // Update pause button
-  const reminderState = state.reminders[currentReminderType];
-  if (reminderState.isPaused) {
-    ELEMENTS.btnPause.textContent = 'Resume';
-  } else if (state.isIdle) {
-    ELEMENTS.btnPause.textContent = 'Resume';
-  } else {
-    ELEMENTS.btnPause.textContent = 'Pause';
-  }
-  
-  // Update mini indicators
-  updateMiniIndicators();
-}
-
-function updateStatusDisplay(type: ReminderType): void {
-  if (!currentState) return;
-  
-  const { settings, state } = currentState;
-  const reminderSettings = settings.reminders[type];
-  const reminderState = state.reminders[type];
-  const seconds = displaySecondsByType[type];
-  
-  // Check various states
-  if (!reminderSettings.enabled) {
-    ELEMENTS.statusLabel.textContent = '';
-    ELEMENTS.statusTime.textContent = 'Disabled';
-    ELEMENTS.statusSubtext.textContent = 'Enable in settings to use this reminder';
-    ELEMENTS.statusCard.className = 'status-card status-disabled';
-  } else if (state.isIdle) {
-    ELEMENTS.statusLabel.textContent = 'Idle: ';
-    ELEMENTS.statusTime.textContent = formatTime(seconds);
-    ELEMENTS.statusSubtext.textContent = 'Paused - will resume when you return';
-    ELEMENTS.statusCard.className = 'status-card status-idle';
-  } else if (reminderState.isPaused) {
-    ELEMENTS.statusLabel.textContent = 'Paused: ';
-    ELEMENTS.statusTime.textContent = formatTime(seconds);
-    ELEMENTS.statusSubtext.textContent = 'Click Resume to continue';
-    ELEMENTS.statusCard.className = 'status-card status-paused';
-  } else {
-    ELEMENTS.statusLabel.textContent = `Next ${type === 'eye' ? 'break' : 'drink'} in: `;
-    ELEMENTS.statusTime.textContent = formatTime(seconds);
-    ELEMENTS.statusSubtext.textContent = '';
-    ELEMENTS.statusCard.className = 'status-card status-active';
-  }
-}
-
-function updateMiniIndicators(): void {
-  if (!currentState) return;
-  
-  const { settings, state } = currentState;
-  
-  for (const type of REMINDER_TYPES) {
-    const reminderSettings = settings.reminders[type];
-    const reminderState = state.reminders[type];
-    const seconds = displaySecondsByType[type];
-    const statusEl = type === 'eye' ? ELEMENTS.statusEye : ELEMENTS.statusWater;
-    const indicatorEl = type === 'eye' ? ELEMENTS.indicatorEye : ELEMENTS.indicatorWater;
-    
-    if (!reminderSettings.enabled) {
-      statusEl.textContent = 'Off';
-      indicatorEl.classList.add('indicator-disabled');
-      indicatorEl.classList.remove('indicator-paused', 'indicator-active');
-    } else if (state.isIdle || reminderState.isPaused) {
-      statusEl.textContent = formatTime(seconds);
-      indicatorEl.classList.add('indicator-paused');
-      indicatorEl.classList.remove('indicator-disabled', 'indicator-active');
-    } else {
-      statusEl.textContent = formatTime(seconds);
-      indicatorEl.classList.add('indicator-active');
-      indicatorEl.classList.remove('indicator-disabled', 'indicator-paused');
-    }
-  }
+  const isPaused = reminderState.isPaused || isIdle;
+  ELEMENTS.btnPause.textContent = isPaused ? 'Resume' : 'Pause';
 }
 
 function formatTime(seconds: number): string {
@@ -219,36 +262,32 @@ function startCountdown(): void {
   if (countdownInterval) clearInterval(countdownInterval);
   
   countdownInterval = setInterval(async () => {
-    if (!currentState) return;
+    if (!currentState || isLoading) return;
     
-    const { state } = currentState;
+    const state = currentState.state;
+    const settings = currentState.settings;
     
-    // Decrement each reminder's countdown if active
-    for (const type of REMINDER_TYPES) {
-      const reminderSettings = currentState.settings.reminders[type];
-      const reminderState = state.reminders[type];
+    // Safely get reminder state
+    const reminderSettings = settings?.reminders?.[currentReminderType];
+    const reminderState = state?.reminders?.[currentReminderType];
+    
+    // Only decrement if enabled, not paused, and not idle
+    if (reminderSettings?.enabled && !reminderState?.isPaused && !state?.isIdle) {
+      displaySeconds = Math.max(0, displaySeconds - 1);
       
-      // Only decrement if enabled and not paused/idle
-      if (reminderSettings.enabled && !reminderState.isPaused && !state.isIdle) {
-        displaySecondsByType[type] = Math.max(0, displaySecondsByType[type] - 1);
-        
-        // Check if timer reached zero
-        if (displaySecondsByType[type] <= 0) {
-          // Trigger check for this reminder
-          await chrome.runtime.sendMessage({
-            type: 'CHECK_NOTIFICATION',
-            payload: { reminderType: type },
-          });
-        }
+      // Check if timer reached zero
+      if (displaySeconds <= 0) {
+        // Trigger check for this reminder
+        await chrome.runtime.sendMessage({
+          type: 'CHECK_NOTIFICATION',
+          payload: { reminderType: currentReminderType },
+        });
+        // Refresh state to get new timer
+        await refreshState();
+      } else {
+        // Just update the display
+        updateUI();
       }
-    }
-    
-    // Update displays
-    updateUI();
-    
-    // Refresh state every 10 seconds to correct drift
-    if (Date.now() % 10000 < 1000) {
-      await refreshState();
     }
   }, 1000);
 }
@@ -258,17 +297,21 @@ function startCountdown(): void {
 // ============================================================================
 
 function setupEventListeners(): void {
-  // Reminder type selector
-  ELEMENTS.reminderTypeSelect.addEventListener('change', async () => {
-    const newType = ELEMENTS.reminderTypeSelect.value as ReminderType;
-    if (newType !== currentReminderType && REMINDER_TYPES.includes(newType)) {
-      currentReminderType = newType;
-      
-      // Persist selection
-      await sendMessage('SET_LAST_SELECTED_REMINDER', { reminderType: newType });
-      
-      // Update UI
-      updateUI();
+  // Segmented control - Eye
+  ELEMENTS.segmentEye.addEventListener('click', async () => {
+    if (currentReminderType !== 'eye') {
+      currentReminderType = 'eye';
+      await sendMessage('SET_LAST_SELECTED_REMINDER', { reminderType: 'eye' });
+      await refreshState();
+    }
+  });
+  
+  // Segmented control - Water
+  ELEMENTS.segmentWater.addEventListener('click', async () => {
+    if (currentReminderType !== 'water') {
+      currentReminderType = 'water';
+      await sendMessage('SET_LAST_SELECTED_REMINDER', { reminderType: 'water' });
+      await refreshState();
     }
   });
   
@@ -302,7 +345,7 @@ function setupEventListeners(): void {
       ELEMENTS.intervalSelect.value = 'custom';
     } else {
       // Revert to previous valid value
-      if (currentState) {
+      if (currentState?.settings?.reminders?.[currentReminderType]) {
         const prevInterval = currentState.settings.reminders[currentReminderType].intervalMinutes;
         ELEMENTS.intervalCustom.value = prevInterval.toString();
       }
@@ -323,8 +366,8 @@ function setupEventListeners(): void {
   ELEMENTS.btnPause.addEventListener('click', async () => {
     if (!currentState) return;
     
-    const reminderState = currentState.state.reminders[currentReminderType];
-    const isPaused = reminderState.isPaused || currentState.state.isIdle;
+    const reminderState = currentState.state?.reminders?.[currentReminderType];
+    const isPaused = reminderState?.isPaused || currentState.state?.isIdle;
     
     if (isPaused) {
       await sendMessage('RESUME', { reminderType: currentReminderType });
@@ -337,19 +380,6 @@ function setupEventListeners(): void {
   ELEMENTS.linkSettings.addEventListener('click', (e) => {
     e.preventDefault();
     chrome.runtime.openOptionsPage();
-  });
-  
-  // Click on mini indicators to switch reminder type
-  ELEMENTS.indicatorEye.addEventListener('click', async () => {
-    currentReminderType = 'eye';
-    await sendMessage('SET_LAST_SELECTED_REMINDER', { reminderType: 'eye' });
-    updateUI();
-  });
-  
-  ELEMENTS.indicatorWater.addEventListener('click', async () => {
-    currentReminderType = 'water';
-    await sendMessage('SET_LAST_SELECTED_REMINDER', { reminderType: 'water' });
-    updateUI();
   });
 }
 
