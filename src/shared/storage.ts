@@ -178,11 +178,14 @@ export async function getSettings(): Promise<SettingsV2> {
     const result = await chrome.storage.sync.get(STORAGE_KEYS.SETTINGS);
     const raw = result[STORAGE_KEYS.SETTINGS];
     
-    // No settings exist - return defaults
-    if (!raw) {
-      console.log('[Breaksy] No settings found, using defaults');
-      return { ...DEFAULT_SETTINGS_V2 };
-    }
+  // No settings exist - return defaults AND save them
+  if (!raw) {
+    console.log('[Breaksy] No settings found, using defaults');
+    const defaults = { ...DEFAULT_SETTINGS_V2 };
+    // IMPORTANT: Save defaults to storage so popup can read them
+    await chrome.storage.sync.set({ [STORAGE_KEYS.SETTINGS]: defaults });
+    return defaults;
+  }
     
     // V1 format detected - migrate and save
     if (isSettingsV1(raw)) {
@@ -258,16 +261,18 @@ export async function getState(): Promise<RuntimeStateV2> {
     const result = await chrome.storage.local.get(STORAGE_KEYS.STATE);
     const raw = result[STORAGE_KEYS.STATE];
     
-    // No state exists - return defaults
-    if (!raw) {
-      console.log('[Breaksy] No runtime state found, using defaults');
-      const defaults = { ...DEFAULT_STATE_V2 };
-      // Update with current settings intervals
-      for (const type of REMINDER_TYPES) {
-        defaults.reminders[type].remainingMs = settings.reminders[type].intervalMinutes * 60 * 1000;
-      }
-      return defaults;
+  // No state exists - return defaults
+  if (!raw) {
+    console.log('[Breaksy] No runtime state found, using defaults');
+    const defaults = { ...DEFAULT_STATE_V2 };
+    // Update with current settings intervals
+    for (const type of REMINDER_TYPES) {
+      defaults.reminders[type].remainingMs = settings.reminders[type].intervalMinutes * 60 * 1000;
     }
+    // IMPORTANT: Save defaults to storage so popup can read them
+    await chrome.storage.local.set({ [STORAGE_KEYS.STATE]: defaults });
+    return defaults;
+  }
     
     // V1 format detected - migrate and save
     if (isRuntimeStateV1(raw)) {

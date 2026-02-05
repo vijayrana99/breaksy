@@ -22,6 +22,7 @@ import {
 } from '../shared/storage';
 
 let idleListenerAdded = false;
+let isInitialized = false;
 
 // ============================================================================
 // LIFECYCLE EVENTS
@@ -48,6 +49,11 @@ chrome.runtime.onStartup.addListener(async () => {
  * Sets up defaults and schedules alarms for enabled reminders
  */
 async function initializeExtension(): Promise<void> {
+  if (isInitialized) {
+    console.log('[Breaksy] Already initialized, skipping');
+    return;
+  }
+  
   const { settings, state } = await getAll();
   
   // Schedule alarms for all enabled, non-paused reminders
@@ -65,6 +71,7 @@ async function initializeExtension(): Promise<void> {
     }
   }
   
+  isInitialized = true;
   console.log('[Breaksy] Extension initialized');
 }
 
@@ -134,6 +141,7 @@ async function restoreState(): Promise<void> {
     }
   }
   
+  isInitialized = true;
   console.log('[Breaksy] State restoration complete');
 }
 
@@ -600,6 +608,13 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
   console.log('[Background] Received message:', message.type, message.payload);
   
   (async () => {
+    // Ensure initialization on first message if needed
+    if (!isInitialized) {
+      console.log('[Breaksy] First message received, initializing...');
+      await initializeExtension();
+      await restoreState();
+    }
+    
     try {
       switch (message.type) {
         case 'GET_STATE': {
@@ -713,7 +728,6 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
         
         case 'TOGGLE_REMINDER_PAUSE':
         case 'TOGGLE_PAUSE': {
-          // Support both new and legacy message types
           const type = (message.payload?.reminderType as ReminderType) ?? 'eye';
           await toggleReminderPause(type);
           sendResponse({ success: true });
@@ -722,7 +736,6 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
         
         case 'REMINDER_TRIGGER_NOW':
         case 'TAKE_BREAK_NOW': {
-          // Support both new and legacy message types
           const type = (message.payload?.reminderType as ReminderType) ?? 'eye';
           await triggerReminderNow(type);
           sendResponse({ success: true });
@@ -731,7 +744,6 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
         
         case 'REMINDER_SNOOZE':
         case 'SNOOZE': {
-          // Support both new and legacy message types
           const type = (message.payload?.reminderType as ReminderType) ?? 'eye';
           await handleSnooze(type);
           sendResponse({ success: true });
