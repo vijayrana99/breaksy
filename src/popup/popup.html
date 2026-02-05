@@ -13,7 +13,17 @@
       <p class="tagline">Healthy breaks for your eyes</p>
     </header>
 
-    <div class="status-card">
+    <!-- Reminder Type Selector -->
+    <div class="control-group control-group-selector">
+      <label class="label" for="reminder-type-select">Reminder</label>
+      <select id="reminder-type-select" class="select select-reminder">
+        <option value="eye">👀 Eye Break</option>
+        <option value="water">💧 Water</option>
+      </select>
+    </div>
+
+    <!-- Status Card -->
+    <div class="status-card" id="status-card">
       <div id="status-text" class="status-text">
         <span id="status-label" class="status-label"></span>
         <span id="status-time" class="status-time">--:--</span>
@@ -21,6 +31,7 @@
       <div id="status-subtext" class="status-subtext"></div>
     </div>
 
+    <!-- Interval Control -->
     <div class="controls">
       <div class="control-group">
         <label class="label" for="interval-select">Interval</label>
@@ -39,10 +50,25 @@
       </div>
     </div>
 
+    <!-- Action Buttons -->
     <div class="buttons">
-      <button id="btn-take-break" class="btn btn-primary">Take Break Now</button>
-      <button id="btn-snooze" class="btn btn-secondary">Snooze 2 min</button>
+      <button id="btn-trigger" class="btn btn-primary">Take Break Now</button>
+      <button id="btn-snooze" class="btn btn-secondary">Snooze</button>
       <button id="btn-pause" class="btn btn-secondary">Pause</button>
+    </div>
+
+    <!-- Status Indicators -->
+    <div class="status-indicators" id="status-indicators">
+      <div class="indicator" id="indicator-eye" data-type="eye">
+        <span class="indicator-icon">👀</span>
+        <span class="indicator-label">Eye</span>
+        <span class="indicator-status" id="status-eye">--:--</span>
+      </div>
+      <div class="indicator" id="indicator-water" data-type="water">
+        <span class="indicator-icon">💧</span>
+        <span class="indicator-label">Water</span>
+        <span class="indicator-status" id="status-water">--:--</span>
+      </div>
     </div>
 
     <footer class="footer">
