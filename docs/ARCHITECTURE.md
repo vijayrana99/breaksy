@@ -1,75 +1,109 @@
 # BREAKSY TECHNICAL MANUAL
 ## Chrome Extension Architecture Documentation
 
-**Version:** 1.0.0  
-**Last Updated:** February 5, 2026  
-**Extension Version:** 1.0.0
+**Version:** 2.0.0  
+**Last Updated:** February 6, 2026  
+**Extension Version:** 2.0.0
 
 ---
 
 ## Table of Contents
 
 1. [Project Overview](#1-project-overview)
-2. [File Structure](#2-file-structure)
-3. [Extension Permissions](#3-extension-permissions)
-4. [Core Data Models](#4-core-data-models)
-5. [Storage Architecture](#5-storage-architecture)
-6. [Background Script Architecture](#6-background-script-architecture)
-7. [Message Passing API](#7-message-passing-api)
-8. [Popup Interface](#8-popup-interface)
-9. [Options Page](#9-options-page)
-10. [Build System](#10-build-system)
-11. [Extension Points for New Features](#11-extension-points-for-new-features)
-12. [Key Design Patterns](#12-key-design-patterns)
-13. [Debugging](#13-debugging)
-14. [Chrome APIs Used](#14-chrome-apis-used)
-15. [Next Steps for AI Assistance](#15-next-steps-for-ai-assistance)
+2. [What's New in v2.0](#2-whats-new-in-v20)
+3. [File Structure](#3-file-structure)
+4. [Extension Permissions](#4-extension-permissions)
+5. [Core Data Models](#5-core-data-models)
+6. [Storage Architecture & Migration](#6-storage-architecture--migration)
+7. [Background Script Architecture](#7-background-script-architecture)
+8. [Message Passing API](#8-message-passing-api)
+9. [Popup Interface](#9-popup-interface)
+10. [Options Page](#10-options-page)
+11. [Build System](#11-build-system)
+12. [Extension Points for New Features](#12-extension-points-for-new-features)
+13. [Key Design Patterns](#13-key-design-patterns)
+14. [Debugging](#14-debugging)
+15. [Chrome APIs Used](#15-chrome-apis-used)
+16. [Next Steps for AI Assistance](#16-next-steps-for-ai-assistance)
 
 ---
 
 ## 1. PROJECT OVERVIEW
 
-**Breaksy** is a Chrome extension that provides healthy computer-use break reminders using the 20-20-20 rule: every 20 minutes, look at something 20 feet away for 20 seconds.
+**Breaksy** is a Chrome extension that provides healthy computer-use break reminders. It now supports multiple reminder types for comprehensive wellness:
+
+- **Eye Breaks** (20-20-20 rule): Every 20 minutes, look at something 20 feet away for 20 seconds
+- **Water Reminders**: Stay hydrated with regular water intake reminders
+- **Extensible**: Easy to add posture checks, stretch reminders, etc.
 
 ### Current Features
-- Customizable break intervals (5-240 minutes)
-- Push notifications with snooze and pause actions
-- Idle time detection (pauses countdown when away)
-- Simple and lightweight Chrome extension (Manifest V3)
-- Persistent state across browser restarts
+- **Multiple Reminder Types**: Eye breaks and water reminders (independent timers)
+- **Customizable Intervals**: 5-240 minutes per reminder type
+- **Independent Controls**: Enable/disable, pause, and snooze each reminder separately
+- **Push Notifications**: Rich notifications with action buttons per reminder type
+- **Idle Detection**: Global idle state pauses all active reminders
+- **Persistent State**: Survives browser restarts with accurate timer restoration
+- **Migration Support**: Seamless upgrade from v1.0 to v2.0
 
 ### Tech Stack
-- **TypeScript** - Type-safe JavaScript
+- **TypeScript** - Type-safe JavaScript with strict mode
 - **Vite** - Build tool and bundler
 - **Chrome Extensions API** - Manifest V3
 - **No external runtime dependencies**
 
 ---
 
-## 2. FILE STRUCTURE
+## 2. WHAT'S NEW IN V2.0
+
+### Multi-Reminder Architecture
+- **Reminder Types**: `ReminderType = 'eye' | 'water'` (extendable)
+- **Per-Reminder State**: Each reminder has independent settings and runtime state
+- **Multiple Alarms**: `breaksy-reminder:eye`, `breaksy-reminder:water`
+- **Type-Encoded IDs**: Notification IDs include type prefix for proper routing
+
+### Data Model v2
+- **SettingsV2**: Schema versioned with `version: 2`, includes `reminders` record
+- **RuntimeStateV2**: Per-reminder runtime state keyed by type
+- **Migration**: Automatic V1 → V2 migration on first run
+
+### UI Enhancements
+- **Reminder Selector**: Top-level selector in both popup and options
+- **Status Indicators**: Mini indicators showing all reminder statuses simultaneously
+- **Toggle Switches**: Enable/disable reminders with visual toggle
+- **Notification Preview**: See notification content before it triggers
+
+### Backward Compatibility
+- Existing users' settings automatically migrate
+- Eye break preserves existing interval/snooze settings
+- Water reminder starts disabled (opt-in)
+- Legacy message types still supported (mapped to 'eye')
+
+---
+
+## 3. FILE STRUCTURE
 
 ```
 breaksy/
 ├── src/
 │   ├── manifest.json              # Extension manifest (permissions, entry points)
 │   ├── background/
-│   │   ├── service_worker.ts      # Main background logic (TypeScript source)
+│   │   ├── service_worker.ts      # Main background logic with multi-reminder support
 │   │   └── background.js          # Compiled service worker (JavaScript)
 │   ├── popup/
-│   │   ├── popup.html             # Popup UI HTML
-│   │   ├── popup.ts               # Popup logic and event handling
-│   │   └── popup.css              # Popup styles
+│   │   ├── popup.html             # Popup UI HTML with reminder selector
+│   │   ├── popup.ts               # Popup logic with per-reminder countdown
+│   │   └── popup.css              # Popup styles with status indicators
 │   ├── options/
-│   │   ├── options.html           # Settings page HTML
-│   │   ├── options.ts             # Settings logic
-│   │   └── options.css            # Settings styles
+│   │   ├── options.html           # Settings page HTML with reminder selector
+│   │   ├── options.ts             # Settings logic with dynamic panels
+│   │   └── options.css            # Settings styles with toggle switches
 │   ├── shared/
-│   │   ├── types.ts               # TypeScript interfaces and constants
-│   │   └── storage.ts             # Chrome storage wrappers
+│   │   ├── types.ts               # TypeScript interfaces (V1 + V2 types)
+│   │   └── storage.ts             # Chrome storage with migration logic
 │   └── assets/
 │       └── icons/                 # Extension icons (16px, 48px, 128px)
 ├── dist/                          # Build output directory
-├── docs/                          # Documentation
+├── docs/
 │   └── ARCHITECTURE.md            # This file
 ├── package.json                   # NPM dependencies and scripts
 ├── vite.config.ts                 # Vite build configuration
@@ -79,7 +113,7 @@ breaksy/
 
 ---
 
-## 3. EXTENSION PERMISSIONS
+## 4. EXTENSION PERMISSIONS
 
 ### Manifest Configuration (`src/manifest.json`)
 
@@ -87,20 +121,20 @@ breaksy/
 {
   "manifest_version": 3,
   "name": "Breaksy",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Healthy computer-use break reminders with push notifications",
   "permissions": [
-    "alarms",        // Schedule reminder alarms (reliable background timing)
+    "alarms",        // Schedule multiple reminder alarms
     "notifications", // Display break reminder notifications
     "storage",       // Persist settings and runtime state
-    "idle"           // Detect user inactivity (pause countdown when away)
+    "idle"           // Detect user inactivity
   ],
   "action": {
     "default_popup": "src/popup/popup.html",
     "default_icon": {
-      "16": "src/assets/icon16.png",
-      "48": "src/assets/icon48.png",
-      "128": "src/assets/icon128.png"
+      "16": "src/assets/icons/icon16.png",
+      "48": "src/assets/icons/icon48.png",
+      "128": "src/assets/icons/icon128.png"
     }
   },
   "options_page": "src/options/options.html",
@@ -108,9 +142,9 @@ breaksy/
     "service_worker": "src/background/background.js"
   },
   "icons": {
-    "16": "src/assets/icon16.png",
-    "48": "src/assets/icon48.png",
-    "128": "src/assets/icon128.png"
+    "16": "src/assets/icons/icon16.png",
+    "48": "src/assets/icons/icon48.png",
+    "128": "src/assets/icons/icon128.png"
   }
 }
 ```
@@ -119,77 +153,102 @@ breaksy/
 
 | Permission | Purpose | Usage Location |
 |------------|---------|----------------|
-| `alarms` | Schedule reliable background timers | `service_worker.ts` |
+| `alarms` | Schedule multiple reminder alarms | `service_worker.ts` |
 | `notifications` | Show break reminder popups | `service_worker.ts` |
 | `storage` | Persist settings and state | `storage.ts` |
 | `idle` | Detect when user is inactive | `service_worker.ts` |
 
-**Privacy Note:** No host permissions are requested. The extension does not access any websites or browsing data.
+**Privacy Note:** No host permissions requested. Extension cannot access websites or browsing data.
 
 ---
 
-## 4. CORE DATA MODELS
+## 5. CORE DATA MODELS
 
-### 4.1 Settings Interface
+### 5.1 Reminder Types
 
-**Location:** `src/shared/types.ts` (lines 1-5)
+**Location:** `src/shared/types.ts`
 
 ```typescript
-export interface Settings {
-  intervalMinutes: number;        // Break interval (5-240 minutes, default: 20)
-  idleThresholdSeconds: number;   // Idle detection threshold (15-600 seconds, default: 60)
-  snoozeMinutes: number;          // Snooze duration (1-60 minutes, default: 5)
+export type ReminderType = 'eye' | 'water';
+export const REMINDER_TYPES: ReminderType[] = ['eye', 'water'];
+```
+
+### 5.2 Reminder Settings (Per Type)
+
+```typescript
+export interface ReminderSettings {
+  enabled: boolean;            // Is this reminder active?
+  intervalMinutes: number;     // How often (5-240 min)
+  snoozeMinutes: number;       // Snooze duration (1-60 min)
+  title: string;               // Notification title
+  message: string;             // Notification message
 }
 ```
 
-**Default Values:**
-```typescript
-export const DEFAULT_SETTINGS: Settings = {
-  intervalMinutes: 20,
-  idleThresholdSeconds: 60,
-  snoozeMinutes: 5,
-};
-```
+**Defaults:**
+- **Eye**: enabled=true, interval=20, snooze=5
+- **Water**: enabled=false, interval=60, snooze=10
 
-### 4.2 Runtime State Interface
-
-**Location:** `src/shared/types.ts` (lines 7-17)
+### 5.3 Reminder Runtime State (Per Type)
 
 ```typescript
-export interface RuntimeState {
-  isPaused: boolean;              // User manually paused reminders
-  isIdle: boolean;                // System detected idle state
-  remainingMs: number;            // Milliseconds remaining until next break
-  lastActiveAt: number;           // Timestamp of last user activity
-  timerEndsAt: number | null;     // When current timer expires
-  nextAlarmAt: number | null;     // When next alarm is scheduled
-  nextNotificationAt: number | null;  // When notification should show
-  lastNotifiedAt: number | null;      // Last notification timestamp (anti-spam)
-  activeNotificationId: string | null; // Currently shown notification ID
+export interface ReminderRuntimeState {
+  isPaused: boolean;               // User paused this reminder
+  remainingMs: number;             // Time until next notification
+  timerEndsAt: number | null;      // Absolute timestamp for persistence
+  nextAlarmAt: number | null;      // Debug/tracking
+  nextNotificationAt: number | null;
+  lastNotifiedAt: number | null;   // Anti-spam tracking
+  activeNotificationId: string | null;
 }
 ```
 
-**Default Values:**
+### 5.4 Settings Schema v2
+
 ```typescript
-export const DEFAULT_STATE: RuntimeState = {
-  isPaused: false,
-  isIdle: false,
-  remainingMs: DEFAULT_SETTINGS.intervalMinutes * 60 * 1000,
-  lastActiveAt: Date.now(),
-  timerEndsAt: null,
-  nextAlarmAt: null,
-  nextNotificationAt: null,
-  lastNotifiedAt: null,
-  activeNotificationId: null,
-};
+export interface SettingsV2 {
+  version: 2;                      // Schema version for migration
+  idleThresholdSeconds: number;    // Global idle detection (15-600 sec)
+  reminders: Record<ReminderType, ReminderSettings>;
+  ui?: {
+    lastSelectedReminder?: ReminderType;  // UI persistence
+  };
+}
 ```
 
-### 4.3 Constants
-
-**Location:** `src/shared/types.ts` (lines 59-68)
+### 5.5 Runtime State Schema v2
 
 ```typescript
-export const PRESET_INTERVALS = [20, 30, 45, 60, 90, 120];
+export interface RuntimeStateV2 {
+  version: 2;
+  isIdle: boolean;                 // Global idle (applies to all)
+  lastActiveAt: number;
+  reminders: Record<ReminderType, ReminderRuntimeState>;
+}
+```
+
+### 5.6 Legacy V1 Types (For Migration)
+
+```typescript
+// V1 - Single reminder
+export interface SettingsV1 {
+  intervalMinutes: number;
+  idleThresholdSeconds: number;
+  snoozeMinutes: number;
+}
+
+export interface RuntimeStateV1 {
+  isPaused: boolean;
+  isIdle: boolean;
+  remainingMs: number;
+  timerEndsAt: number | null;
+  // ... other fields
+}
+```
+
+### 5.7 Constants
+
+```typescript
 export const MIN_INTERVAL = 5;
 export const MAX_INTERVAL = 240;
 export const MIN_IDLE_THRESHOLD = 15;
@@ -197,1258 +256,687 @@ export const MAX_IDLE_THRESHOLD = 600;
 export const MIN_SNOOZE = 1;
 export const MAX_SNOOZE = 60;
 export const ANTI_SPAM_WINDOW_MS = 60000;  // 60 seconds
-export const ALARM_NAME = 'breaksy-reminder';
-export const IDLE_CHECK_INTERVAL = 30;
-```
+export const ALARM_PREFIX = 'breaksy-reminder:';
 
-### 4.4 Message Types
-
-**Location:** `src/shared/types.ts` (lines 24-33)
-
-```typescript
-export type MessageType =
-  | 'GET_STATE'           // Retrieve current settings and state
-  | 'SET_INTERVAL'        // Change break interval
-  | 'SET_SNOOZE'          // Change snooze duration
-  | 'TOGGLE_PAUSE'        // Pause/resume reminders
-  | 'TAKE_BREAK_NOW'      // Trigger immediate break
-  | 'SNOOZE'              // Snooze current reminder
-  | 'RESUME'              // Resume from pause/idle
-  | 'CHECK_NOTIFICATION'  // Check if notification should trigger
-  | 'RESET';              // Reset to defaults
-```
-
-### 4.5 State Response Interface
-
-**Location:** `src/shared/types.ts` (lines 35-39)
-
-```typescript
-export interface StateResponse {
-  settings: Settings;
-  state: RuntimeState;
-  remainingSeconds: number;
-}
+// Alarm names: 'breaksy-reminder:eye', 'breaksy-reminder:water'
+export function getAlarmName(type: ReminderType): string;
+export function parseAlarmType(name: string): ReminderType | null;
+export function parseNotificationType(id: string): ReminderType | null;
 ```
 
 ---
 
-## 5. STORAGE ARCHITECTURE
+## 6. STORAGE ARCHITECTURE & MIGRATION
 
-### 5.1 Storage Strategy
+### 6.1 Storage Strategy
 
-**Location:** `src/shared/storage.ts`
+**Two storage areas:**
+- **`chrome.storage.sync`** - User settings (cross-device sync)
+- **`chrome.storage.local`** - Runtime state (device-specific)
 
-Two storage areas are used:
-- **`chrome.storage.sync`** - User settings (synced across devices)
-- **`chrome.storage.local`** - Runtime state (device-specific, not synced)
-
-### 5.2 Storage Keys
-
+**Storage Keys:**
 ```typescript
 const STORAGE_KEYS = {
   SETTINGS: 'breaksy-settings',
   STATE: 'breaksy-state',
-} as const;
+};
 ```
 
-### 5.3 Storage API Functions
+### 6.2 Migration System
 
-| Function | Description | Storage Type |
-|----------|-------------|--------------|
-| `getSettings()` | Retrieve user settings | sync |
-| `setSettings(settings)` | Update user settings | sync |
-| `getState()` | Retrieve runtime state | local |
-| `setState(state)` | Update runtime state | local |
-| `getAll()` | Get settings and state in parallel | both |
-| `resetToDefaults()` | Reset everything to defaults | both |
+**Detection:** Check for `version` field - V1 lacks it
 
-### 5.4 Usage Example
+**Migration Logic:**
+```typescript
+// V1 Settings → V2
+{
+  intervalMinutes: 20,      →  reminders.eye.intervalMinutes
+  snoozeMinutes: 5,         →  reminders.eye.snoozeMinutes
+  idleThresholdSeconds: 60  →  idleThresholdSeconds (unchanged)
+}
+// Plus: reminders.water with defaults (enabled=false)
+
+// V1 Runtime State → V2
+{
+  isPaused: false,          →  reminders.eye.isPaused
+  timerEndsAt: 123456      →  reminders.eye.timerEndsAt
+  // ... other fields       →  reminders.eye.*
+}
+// Plus: reminders.water with fresh defaults
+```
+
+**Migration Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `isSettingsV1()` | Detect V1 format |
+| `isRuntimeStateV1()` | Detect V1 format |
+| `migrateSettingsV1ToV2()` | Convert settings |
+| `migrateRuntimeStateV1ToV2()` | Convert runtime state |
+| `ensureCompleteV2Settings()` | Fill missing fields |
+| `ensureCompleteV2State()` | Fill missing fields |
+
+**Idempotency:** Migration safe to run multiple times. Checks version field first.
+
+### 6.3 Storage API Functions
 
 ```typescript
-import { getSettings, setSettings, getState, setState } from './shared/storage';
+// Get with automatic migration
+async function getSettings(): Promise<SettingsV2>
+async function getState(): Promise<RuntimeStateV2>
+async function getAll(): Promise<{ settings: SettingsV2; state: RuntimeStateV2 }>
 
-// Get current settings
-const settings = await getSettings();
+// Update (deep merge for reminders)
+async function setSettings(settings: Partial<SettingsV2>): Promise<void>
+async function setState(state: Partial<RuntimeStateV2>): Promise<void>
 
-// Update interval
-await setSettings({ intervalMinutes: 30 });
+// Per-reminder helpers
+async function updateReminderSettings(type: ReminderType, patch: Partial<ReminderSettings>)
+async function updateReminderState(type: ReminderType, patch: Partial<ReminderRuntimeState>)
+async function setLastSelectedReminder(type: ReminderType)
 
-// Get runtime state
-const state = await getState();
-
-// Update state
-await setState({ isPaused: true });
+// Utility
+function calculateRemainingSeconds(state: RuntimeStateV2): Record<ReminderType, number>
 ```
 
 ---
 
-## 6. BACKGROUND SCRIPT ARCHITECTURE
+## 7. BACKGROUND SCRIPT ARCHITECTURE
 
-### 6.1 Service Worker Lifecycle
+### 7.1 Alarm Management
 
-**Location:** `src/background/service_worker.ts`
+**Multiple Concurrent Alarms:**
+```typescript
+// Alarm names
+'breaksy-reminder:eye'    // Eye break alarm
+'breaksy-reminder:water'  // Water reminder alarm
 
-**Initialization Events:**
+// Scheduling
+async function scheduleReminder(type: ReminderType, delayMs?: number)
+async function clearReminderAlarm(type: ReminderType)
+```
 
-1. **Extension Install/Update** (lines 15-19)
-   ```typescript
-   chrome.runtime.onInstalled.addListener(async () => {
-     console.log('[Breaksy] Extension installed');
-     await initializeExtension();
-     setupIdleListener();
-   });
-   ```
+**Scheduling Rules:**
+1. Only schedule if `enabled === true`
+2. Only schedule if `isPaused === false`
+3. Only schedule if global `isIdle === false`
+4. Calculate remaining time from `timerEndsAt` (source of truth)
+5. Minimum 1 minute delay (Chrome limitation)
 
-2. **Browser Startup** (lines 21-25)
-   ```typescript
-   chrome.runtime.onStartup.addListener(async () => {
-     console.log('[Breaksy] Extension startup');
-     await restoreState();
-     setupIdleListener();
-   });
-   ```
+### 7.2 Notification System
 
-### 6.2 Key Functions
+**Type-Specific Notifications:**
+```typescript
+// Notification ID format: `breaksy-${type}-${timestamp}`
+// Examples: 'breaksy-eye-1234567890', 'breaksy-water-1234567890'
+
+async function showReminderNotification(type: ReminderType) {
+  const content = getNotificationContent(type);
+  // Eye: "Time for an eye break 👀"
+  // Water: "Time to hydrate 💧"
+}
+```
+
+**Per-Reminder Anti-Spam:**
+- Uses `reminderState.lastNotifiedAt` (not global)
+- 60-second window per reminder type
+- Eye notifications don't block water notifications
+
+**Button Routing:**
+```typescript
+chrome.notifications.onButtonClicked.addListener((id, buttonIndex) => {
+  const type = parseNotificationType(id);  // Extract type from ID
+  if (buttonIndex === 0) handleSnooze(type);
+  if (buttonIndex === 1) pauseReminder(type);
+});
+```
+
+### 7.3 Idle Detection (Global)
+
+**Behavior:**
+- When idle/locked: Pause ALL reminders, save remaining time for each
+- When active: Resume ALL enabled, non-paused reminders
+
+```typescript
+async function handleIdleStateChange(state: IdleState) {
+  if (state === 'idle' || state === 'locked') {
+    // Save remainingMs for each reminder
+    // Clear all alarms
+    // Set global isIdle = true
+  } else if (state === 'active') {
+    // Set global isIdle = false
+    // Schedule each enabled, non-paused reminder
+  }
+}
+```
+
+### 7.4 State Restoration
+
+**On Browser Startup:**
+1. Migrate settings/state if needed
+2. For each reminder:
+   - If disabled → skip
+   - If paused → skip
+   - If elapsed during restart → show notification (respect anti-spam)
+   - Else → schedule with remaining time
+
+### 7.5 Key Functions Reference
 
 | Function | Line | Purpose |
 |----------|------|---------|
-| `initializeExtension()` | 27-50 | Set up defaults, schedule first alarm |
-| `restoreState()` | 52-80 | Recover timer state after browser restart |
-| `setupIdleListener()` | 82-87 | Register idle state change listener |
-| `handleIdleStateChange()` | 89-113 | Handle idle/active transitions |
-| `scheduleReminder()` | 115-149 | Schedule next alarm |
-| `clearAlarm()` | 151-154 | Cancel scheduled alarm |
-| `showNotification()` | 176-224 | Display break reminder |
+| `initializeExtension()` | - | Setup on install |
+| `restoreState()` | - | Restore after browser restart |
+| `scheduleReminder(type, delayMs)` | - | Schedule alarm for specific reminder |
+| `clearReminderAlarm(type)` | - | Cancel alarm for specific reminder |
+| `showReminderNotification(type)` | - | Show notification with type-specific content |
+| `handleSnooze(type)` | - | Snooze specific reminder |
+| `pauseReminder(type)` | - | Pause specific reminder |
+| `resumeReminder(type)` | - | Resume specific reminder |
+| `handleIdleStateChange()` | - | Global idle handling |
 
-### 6.3 Alarm System
+---
 
-**Alarm Scheduling** (lines 115-149):
+## 8. MESSAGE PASSING API
+
+### 8.1 Type-Aware Message Types
+
 ```typescript
-async function scheduleReminder(delayMs?: number): Promise<void> {
-  // Calculate delay
-  const timerEndsAt = now + requestedDelay;
+export type MessageType =
+  // State queries
+  | 'GET_STATE'
   
-  // Persist state
-  await setState({
-    timerEndsAt,
-    remainingMs: requestedDelay,
-    nextAlarmAt: timerEndsAt,
-    nextNotificationAt: nextNotificationTime,
-  });
+  // Type-aware reminder commands
+  | 'SET_REMINDER_INTERVAL'      // payload: { reminderType, interval }
+  | 'SET_REMINDER_SNOOZE'        // payload: { reminderType, snooze }
+  | 'TOGGLE_REMINDER_ENABLED'    // payload: { reminderType, enabled }
+  | 'TOGGLE_REMINDER_PAUSE'      // payload: { reminderType }
+  | 'REMINDER_TRIGGER_NOW'       // payload: { reminderType }
+  | 'REMINDER_SNOOZE'            // payload: { reminderType }
   
-  // Create alarm (minimum 1 minute)
-  await chrome.alarms.clear(ALARM_NAME);
-  const delayMinutes = Math.max(1, requestedDelay / 60000);
-  await chrome.alarms.create(ALARM_NAME, { delayInMinutes: delayMinutes });
+  // Global commands
+  | 'SET_IDLE_THRESHOLD'         // payload: { idleThresholdSeconds }
+  | 'SET_LAST_SELECTED_REMINDER' // payload: { reminderType }
+  | 'RESET'
+  | 'CHECK_NOTIFICATION'         // payload: { reminderType }
+  
+  // Legacy (backward compatibility - map to 'eye')
+  | 'SET_INTERVAL'
+  | 'SET_SNOOZE'
+  | 'TOGGLE_PAUSE'
+  | 'TAKE_BREAK_NOW'
+  | 'SNOOZE'
+  | 'RESUME';
+```
+
+### 8.2 Response Shapes
+
+**GET_STATE Response:**
+```typescript
+interface StateResponse {
+  settings: SettingsV2;
+  state: RuntimeStateV2;
+  remainingSecondsByType: Record<ReminderType, number>;
+  // Example: { eye: 1200, water: 3600 }
 }
 ```
 
-**Alarm Handler** (lines 156-174):
+### 8.3 Usage Examples
+
 ```typescript
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name !== ALARM_NAME) return;
-  
-  const { settings, state } = await getAll();
-  if (state.isPaused || state.isIdle) return;
-  
-  await showNotification();
-  
-  // Reset timer and schedule next
-  const timerEndsAt = Date.now() + settings.intervalMinutes * 60 * 1000;
-  await setState({ /* ... */ });
-  await scheduleReminder();
-});
-```
+// Get current state
+const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
 
-### 6.4 Idle Detection
-
-**Setup** (lines 82-87):
-```typescript
-function setupIdleListener(): void {
-  if (idleListenerAdded) return;
-  idleListenerAdded = true;
-  chrome.idle.onStateChanged.addListener(handleIdleStateChange);
-}
-```
-
-**Handler** (lines 89-113):
-```typescript
-async function handleIdleStateChange(state: IdleState): Promise<void> {
-  // States: 'active', 'idle', 'locked'
-  
-  if (state === 'idle' || state === 'locked') {
-    // Save remaining time and pause
-    await setState({ isIdle: true, remainingMs: remaining });
-    await clearAlarm();
-  } else if (state === 'active') {
-    // Resume from saved remaining time
-    await setState({ isIdle: false });
-    await scheduleReminder(currentState.remainingMs);
-  }
-}
-```
-
-### 6.5 Notification System
-
-**Show Notification** (lines 176-224):
-```typescript
-async function showNotification(): Promise<void> {
-  // Anti-spam check
-  if (state.lastNotifiedAt && now - state.lastNotifiedAt < ANTI_SPAM_WINDOW_MS) {
-    return; // Skip if within 60 seconds
-  }
-  
-  const notificationId = `breaksy-${Date.now()}`;
-  const buttons = [
-    { title: `Snooze ${settings.snoozeMinutes} min` },
-    { title: 'Pause' },
-  ];
-  
-  await chrome.notifications.create(notificationId, {
-    type: 'basic',
-    title: 'Time for an eye break 👀',
-    message: 'Look at something ~20 ft / 6 m away for 20 seconds.',
-    iconUrl: chrome.runtime.getURL('src/assets/icon128.png'),
-    buttons,
-    requireInteraction: true,
-  });
-  
-  await setState({ activeNotificationId: notificationId, lastNotifiedAt: now });
-}
-```
-
-**Notification Button Handlers** (lines 226-249):
-```typescript
-chrome.notifications.onButtonClicked.addListener(async (notificationId, buttonIndex) => {
-  if (buttonIndex === 0) await handleSnooze();
-  else if (buttonIndex === 1) await handlePauseToggle();
+// Change eye break interval to 30 minutes
+await chrome.runtime.sendMessage({
+  type: 'SET_REMINDER_INTERVAL',
+  payload: { reminderType: 'eye', interval: 30 }
 });
 
-chrome.notifications.onClicked.addListener(async (notificationId) => {
-  await setState({ activeNotificationId: null });
+// Enable water reminders
+await chrome.runtime.sendMessage({
+  type: 'TOGGLE_REMINDER_ENABLED',
+  payload: { reminderType: 'water', enabled: true }
 });
 
-chrome.notifications.onClosed.addListener(async (notificationId, byUser) => {
-  await setState({ activeNotificationId: null });
+// Snooze current water reminder
+await chrome.runtime.sendMessage({
+  type: 'REMINDER_SNOOZE',
+  payload: { reminderType: 'water' }
 });
-```
-
-### 6.6 Browser Restart Recovery
-
-**Restore State** (lines 52-80):
-```typescript
-async function restoreState(): Promise<void> {
-  const { settings, state } = await getAll();
-  const now = Date.now();
-  
-  if (state.isPaused) {
-    await clearAlarm();
-    return;
-  }
-  
-  if (state.isIdle) {
-    await scheduleReminder(state.remainingMs);
-    return;
-  }
-  
-  // Calculate remaining time from persisted timerEndsAt
-  const remaining = state.timerEndsAt ? Math.max(0, state.timerEndsAt - now) : state.remainingMs;
-  
-  if (remaining <= 0) {
-    // Timer elapsed during restart - show notification
-    await showNotification();
-    await scheduleReminder();
-  } else {
-    // Resume countdown
-    await scheduleReminder(remaining);
-  }
-}
 ```
 
 ---
 
-## 7. MESSAGE PASSING API
+## 9. POPUP INTERFACE
 
-### 7.1 Message Handler Overview
+### 9.1 Features
 
-**Location:** `src/background/service_worker.ts` (lines 316-428)
+**Reminder Type Selector:**
+- Dropdown at top: "👀 Eye Break" | "💧 Water"
+- Persists selection to settings
+- Updates all UI elements for selected type
 
-All communication between popup/options and background script uses `chrome.runtime.sendMessage()`.
+**Status Card:**
+- Shows countdown for selected reminder
+- Contextual label: "Next break in:" or "Next drink in:"
+- States: Active (blue), Paused (yellow), Idle (gray), Disabled (red)
 
-### 7.2 Message Handler Structure
+**Mini Status Indicators:**
+- Shows both reminders simultaneously
+- Eye icon with countdown | Water icon with countdown
+- Click to switch reminder type
+- Color coding: Active (blue), Paused (yellow), Disabled (gray)
+
+**Action Buttons:**
+- Contextual trigger: "Take Break Now" (eye) / "Drink Water Now" (water)
+- Snooze: Shows reminder-specific snooze duration
+- Pause/Resume: Toggles selected reminder
+
+**Interval Selector:**
+- Presets: 20, 30, 45, 60, 90, 120 minutes
+- Custom input (5-240 range)
+- Applies to selected reminder only
+
+### 9.2 Countdown Implementation
 
 ```typescript
-chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
-  (async () => {
-    try {
-      switch (message.type) {
-        case 'GET_STATE': { /* ... */ }
-        case 'SET_INTERVAL': { /* ... */ }
-        // ... other cases
-      }
-    } catch (error) {
-      console.error('[Breaksy] Message handler error:', error);
-      sendResponse({ error: String(error) });
+// Decrement each reminder independently
+for (const type of REMINDER_TYPES) {
+  if (enabled && !paused && !idle) {
+    displaySecondsByType[type]--;
+    if (displaySecondsByType[type] <= 0) {
+      // Trigger check for this specific reminder
+      await chrome.runtime.sendMessage({
+        type: 'CHECK_NOTIFICATION',
+        payload: { reminderType: type }
+      });
     }
-  })();
-  return true; // Keep channel open for async response
-});
-```
-
-### 7.3 Message Types Detail
-
-#### GET_STATE
-Retrieves current settings and runtime state.
-
-**Request:**
-```typescript
-{ type: 'GET_STATE' }
-```
-
-**Response:**
-```typescript
-{
-  settings: Settings,
-  state: RuntimeState,
-  remainingSeconds: number
-}
-```
-
-#### SET_INTERVAL
-Changes the break interval.
-
-**Request:**
-```typescript
-{ type: 'SET_INTERVAL', payload: { interval: number } }
-```
-
-**Behavior:**
-- Validates interval is within MIN_INTERVAL and MAX_INTERVAL
-- Updates settings
-- If not paused and not idle, resets timer with new interval
-- Schedules new alarm
-
-#### SET_SNOOZE
-Changes the snooze duration.
-
-**Request:**
-```typescript
-{ type: 'SET_SNOOZE', payload: { snooze: number } }
-```
-
-**Behavior:**
-- Updates snoozeMinutes in settings
-
-#### TOGGLE_PAUSE
-Toggles pause/resume state.
-
-**Request:**
-```typescript
-{ type: 'TOGGLE_PAUSE' }
-```
-
-**Behavior:**
-- If paused: resumes countdown
-- If active: pauses countdown and clears alarm
-
-#### TAKE_BREAK_NOW
-Triggers immediate break notification.
-
-**Request:**
-```typescript
-{ type: 'TAKE_BREAK_NOW' }
-```
-
-**Behavior:**
-- Checks anti-spam window (60 seconds)
-- Shows notification immediately
-- Resets timer to full interval
-
-#### SNOOZE
-Delays current reminder.
-
-**Request:**
-```typescript
-{ type: 'SNOOZE' }
-```
-
-**Behavior:**
-- Clears active notification
-- Sets timer to snooze duration
-- Schedules new alarm
-
-#### RESUME
-Resumes from pause or idle state.
-
-**Request:**
-```typescript
-{ type: 'RESUME' }
-```
-
-**Behavior:**
-- Sets isPaused to false
-- If remaining time <= 0, resets to full interval
-- Schedules alarm if not idle
-
-#### CHECK_NOTIFICATION
-Checks if notification should be shown (used by popup countdown).
-
-**Request:**
-```typescript
-{ type: 'CHECK_NOTIFICATION' }
-```
-
-**Response:**
-```typescript
-{ triggered: boolean, reason?: string }
-```
-
-**Behavior:**
-- Checks if paused/idle
-- Checks if nextNotificationAt has passed
-- Checks anti-spam window
-- Shows notification if all conditions met
-
-#### RESET
-Resets all settings and state to defaults.
-
-**Request:**
-```typescript
-{ type: 'RESET' }
-```
-
-**Behavior:**
-- Clears all storage
-- Reinitializes with defaults
-- Schedules new alarm
-
----
-
-## 8. POPUP INTERFACE
-
-### 8.1 HTML Structure
-
-**Location:** `src/popup/popup.html`
-
-```html
-<div class="container">
-  <header class="header">
-    <h1 class="title">Breaksy</h1>
-    <p class="tagline">Healthy breaks for your eyes</p>
-  </header>
-
-  <div class="status-card">
-    <div id="status-text" class="status-text">
-      <span id="status-label" class="status-label"></span>
-      <span id="status-time" class="status-time">--:--</span>
-    </div>
-    <div id="status-subtext" class="status-subtext"></div>
-  </div>
-
-  <div class="controls">
-    <div class="control-group">
-      <label class="label" for="interval-select">Interval</label>
-      <div class="input-row">
-        <select id="interval-select" class="select">
-          <option value="20">20 min</option>
-          <option value="30">30 min</option>
-          <option value="45">45 min</option>
-          <option value="60">60 min</option>
-          <option value="90">90 min</option>
-          <option value="120">120 min</option>
-          <option value="custom">Custom...</option>
-        </select>
-        <input type="number" id="interval-custom" class="input input-number hidden" min="5" max="240" value="20">
-      </div>
-    </div>
-  </div>
-
-  <div class="buttons">
-    <button id="btn-take-break" class="btn btn-primary">Take Break Now</button>
-    <button id="btn-snooze" class="btn btn-secondary">Snooze 2 min</button>
-    <button id="btn-pause" class="btn btn-secondary">Pause</button>
-  </div>
-
-  <footer class="footer">
-    <a href="#" id="link-settings" class="link">Settings</a>
-  </footer>
-</div>
-```
-
-### 8.2 Key Features
-
-**Location:** `src/popup/popup.ts`
-
-| Feature | Description |
-|---------|-------------|
-| Status Display | Shows "Next break in: MM:SS" or "Paused" or "Idle" |
-| Countdown Timer | Real-time countdown that syncs with background |
-| Interval Selector | Dropdown with presets + custom input |
-| Take Break Now | Immediate notification trigger |
-| Snooze Button | Delays reminder by configured snooze duration |
-| Pause/Resume | Toggle countdown state |
-| Settings Link | Opens options page |
-
-### 8.3 Countdown Implementation
-
-```typescript
-let countdownInterval: ReturnType<typeof setInterval> | null = null;
-let displaySeconds = 0;
-
-function startCountdown(): void {
-  if (countdownInterval) clearInterval(countdownInterval);
-  
-  displaySeconds = currentState?.remainingSeconds ?? 0;
-  
-  countdownInterval = setInterval(async () => {
-    if (!currentState) return;
-    const { state } = currentState;
-    
-    if (state.isPaused || state.isIdle) return;
-    
-    displaySeconds = Math.max(0, displaySeconds - 1);
-    updateDisplay();
-    
-    // Check if time is up
-    if (displaySeconds <= 0) {
-      await sendMessage('CHECK_NOTIFICATION');
-      await refreshState();
-    }
-  }, 1000);
-}
-
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-}
-```
-
-### 8.4 Event Handlers
-
-```typescript
-// Interval selection
-ELEMENTS.intervalSelect.addEventListener('change', async () => {
-  const value = ELEMENTS.intervalSelect.value;
-  if (value === 'custom') {
-    ELEMENTS.intervalCustom.classList.remove('hidden');
-  } else {
-    await sendMessage('SET_INTERVAL', { interval: parseInt(value, 10) });
   }
-});
-
-// Take break now
-ELEMENTS.btnTakeBreak.addEventListener('click', async () => {
-  await sendMessage('TAKE_BREAK_NOW');
-});
-
-// Snooze
-ELEMENTS.btnSnooze.addEventListener('click', async () => {
-  await sendMessage('SNOOZE');
-});
-
-// Pause/Resume
-ELEMENTS.btnPause.addEventListener('click', async () => {
-  if (currentState?.state.isPaused || currentState?.state.isIdle) {
-    await sendMessage('RESUME');
-  } else {
-    await sendMessage('TOGGLE_PAUSE');
-  }
-});
-```
-
----
-
-## 9. OPTIONS PAGE
-
-### 9.1 HTML Structure
-
-**Location:** `src/options/options.html`
-
-```html
-<div class="container">
-  <header class="header">
-    <h1 class="title">Breaksy Settings</h1>
-    <p class="tagline">Configure your break reminders</p>
-  </header>
-
-  <section class="section">
-    <h2 class="section-title">Reminder Settings</h2>
-    <div class="field">
-      <label class="label" for="interval-preset">Interval (minutes)</label>
-      <div class="input-row">
-        <select id="interval-preset" class="select">
-          <option value="20">20 minutes</option>
-          <option value="30">30 minutes</option>
-          <option value="45">45 minutes</option>
-          <option value="60">60 minutes</option>
-          <option value="90">90 minutes</option>
-          <option value="120">120 minutes</option>
-          <option value="custom">Custom...</option>
-        </select>
-        <input type="number" id="interval-custom" class="input input-number hidden" min="5" max="240" value="20">
-      </div>
-      <p class="hint">How often to remind you to take a break (5-240 minutes)</p>
-    </div>
-  </section>
-
-  <section class="section">
-    <h2 class="section-title">Idle Detection</h2>
-    <div class="field">
-      <label class="label" for="idle-threshold">Idle threshold (seconds)</label>
-      <input type="number" id="idle-threshold" class="input" min="15" max="600" value="60">
-      <p class="hint">Pause countdown after this many seconds of inactivity</p>
-    </div>
-  </section>
-
-  <section class="section">
-    <h2 class="section-title">Snooze</h2>
-    <div class="field">
-      <label class="label" for="snooze-duration">Snooze duration (minutes)</label>
-      <input type="number" id="snooze-duration" class="input" min="1" max="60" value="5">
-      <p class="hint">How long to snooze when you click "Snooze"</p>
-    </div>
-  </section>
-
-  <section class="section section-actions">
-    <button id="btn-reset" class="btn btn-danger">Reset to Defaults</button>
-  </section>
-
-  <footer class="footer">
-    <p class="privacy-note">🔒 No data leaves your device</p>
-  </footer>
-</div>
-```
-
-### 9.2 Key Features
-
-**Location:** `src/options/options.ts`
-
-| Setting | Range | Default | Description |
-|---------|-------|---------|-------------|
-| Interval | 5-240 min | 20 min | How often to show reminders |
-| Idle Threshold | 15-600 sec | 60 sec | Inactivity time before pausing |
-| Snooze Duration | 1-60 min | 5 min | Snooze delay duration |
-| Reset Button | - | - | Restore all defaults |
-
-### 9.3 Validation
-
-All inputs validated against min/max constants before saving:
-
-```typescript
-const value = parseInt(ELEMENTS.intervalCustom.value, 10);
-if (value >= MIN_INTERVAL && value <= MAX_INTERVAL) {
-  await sendMessage('SET_INTERVAL', { interval: value });
-} else {
-  // Revert to previous valid value
-  ELEMENTS.intervalCustom.value = currentState?.settings.intervalMinutes.toString() || '20';
 }
+
+// Refresh state every 10 seconds to correct drift
 ```
 
 ---
 
-## 10. BUILD SYSTEM
+## 10. OPTIONS PAGE
 
-### 10.1 Package Configuration
+### 10.1 Features
 
-**Location:** `package.json`
+**Top-Level Reminder Selector:**
+- Large dropdown with icons
+- Persists to settings.ui.lastSelectedReminder
+- Drives entire settings panel
+
+**Per-Reminder Settings:**
+- **Enable Toggle**: Visual switch with on/off state
+- **Interval**: Preset dropdown + custom input (5-240 min)
+- **Snooze Duration**: Number input (1-60 min)
+- **Notification Preview**: Shows title/message for selected reminder
+- **Info Box**: Contextual tips (20-20-20 rule for eye, hydration tips for water)
+
+**Global Settings:**
+- **Idle Threshold**: Seconds of inactivity before pausing (15-600)
+
+**Actions:**
+- **Reset to Defaults**: Resets ALL reminders to defaults
+
+### 10.2 Dynamic UI Updates
+
+When reminder type changes:
+1. Load settings for selected type
+2. Update all form fields
+3. Update notification preview
+4. Show/hide contextual info box
+5. Persist selection
+
+---
+
+## 11. BUILD SYSTEM
+
+### 11.1 Scripts
 
 ```json
 {
-  "name": "breaksy",
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "build": "vite build && mkdir -p dist/src/background && cp src/manifest.json dist/ && cp src/background/background.js dist/src/background/ && cp -r src/assets/* dist/src/assets/",
-    "watch": "vite build --watch",
-    "typecheck": "tsc --noEmit"
-  },
-  "devDependencies": {
-    "@types/chrome": "^0.0.258",
-    "typescript": "^5.3.3",
-    "vite": "^5.0.10"
-  }
+  "build": "vite build && mkdir -p dist/src/background && cp src/manifest.json dist/ && cp src/background/background.js dist/src/background/ && cp -r src/assets/* dist/src/assets/",
+  "watch": "vite build --watch",
+  "typecheck": "tsc --noEmit"
 }
 ```
 
-### 10.2 Build Scripts
-
-| Script | Command | Purpose |
-|--------|---------|---------|
-| `build` | `npm run build` | Production build |
-| `watch` | `npm run watch` | Development with auto-rebuild |
-| `typecheck` | `npm run typecheck` | TypeScript type checking |
-
-### 10.3 Build Process
-
-1. **Vite Build**
-   - Compiles TypeScript files to JavaScript
-   - Bundles popup.ts, options.ts, etc.
-   - Outputs to `dist/` directory
-
-2. **Copy Static Assets**
-   - `manifest.json` → `dist/`
-   - `background.js` (pre-compiled) → `dist/src/background/`
-   - Icons → `dist/src/assets/`
-
-### 10.4 TypeScript Configuration
-
-**Location:** `tsconfig.json`
-
-```json
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "lib": ["ES2020", "DOM"],
-    "types": ["chrome"]
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
-}
-```
-
-### 10.5 Loading Extension in Chrome
+### 11.2 Loading in Chrome
 
 1. Run `npm run build`
-2. Open Chrome and navigate to `chrome://extensions/`
-3. Enable "Developer mode" (toggle in top-right)
+2. Open `chrome://extensions/`
+3. Enable "Developer mode"
 4. Click "Load unpacked"
 5. Select the `dist` folder
-6. Extension is now loaded and active
 
 ---
 
-## 11. EXTENSION POINTS FOR NEW FEATURES
+## 12. EXTENSION POINTS FOR NEW FEATURES
 
-### 11.1 Adding Multiple Reminder Types
+### 12.1 Adding a New Reminder Type (e.g., Posture)
 
-**Use Case:** Water drinking reminders, posture check reminders, etc.
-
-**Required Changes:**
-
-1. **Update Types** (`src/shared/types.ts`):
-   ```typescript
-   export type ReminderType = 'eye' | 'water' | 'posture';
-   
-   export interface Settings {
-     reminders: {
-       [key in ReminderType]: ReminderSettings;
-     };
-     idleThresholdSeconds: number;
-   }
-   ```
-
-2. **Add Multiple Alarms** (`src/background/service_worker.ts`):
-   ```typescript
-   export const ALARM_EYE = 'breaksy-eye';
-   export const ALARM_WATER = 'breaksy-water';
-   
-   // In alarm handler
-   chrome.alarms.onAlarm.addListener(async (alarm) => {
-     const type = alarm.name === ALARM_EYE ? 'eye' : 'water';
-     await handleReminder(type);
-   });
-   ```
-
-3. **Update Storage** (`src/shared/storage.ts`):
-   - Migrate existing single-reminder settings to new format
-   - Handle backward compatibility
-
-4. **Update UI** (`src/popup/`, `src/options/`):
-   - Add toggle switches for each reminder type
-   - Per-reminder interval settings
-   - Tabbed interface or sections
-
-**Complexity:** Medium (requires careful state management for concurrent timers)
-
-### 11.2 Adding Daily Statistics
-
-**Use Case:** Track breaks taken, snooze count, pause duration.
-
-**Required Changes:**
-
-1. **Add Stats to State** (`src/shared/types.ts`):
-   ```typescript
-   export interface DailyStats {
-     date: string;  // YYYY-MM-DD
-     breaksTaken: number;
-     snoozes: number;
-     pauseDurationMinutes: number;
-   }
-   
-   export interface RuntimeState {
-     // ... existing fields
-     dailyStats: DailyStats;
-   }
-   ```
-
-2. **Track Events** (`src/background/service_worker.ts`):
-   - Increment breaksTaken when notification shown
-   - Increment snoozes when snooze clicked
-   - Track pause duration
-
-3. **Daily Reset Alarm**:
-   ```typescript
-   // Schedule alarm for midnight
-   await chrome.alarms.create('daily-reset', {
-     when: getNextMidnight()
-   });
-   
-   chrome.alarms.onAlarm.addListener(async (alarm) => {
-     if (alarm.name === 'daily-reset') {
-       await resetDailyStats();
-     }
-   });
-   ```
-
-4. **Display Stats** (`src/popup/popup.ts`):
-   - Show today's stats in popup
-   - Weekly/monthly history in options page
-
-**Complexity:** Low-Medium
-
-### 11.3 Adding Sound Alerts
-
-**Use Case:** Play sound along with notification.
-
-**Required Changes:**
-
-1. **Add Audio Assets**:
-   - Add sound files to `src/assets/sounds/`
-   - Update manifest to include web_accessible_resources if needed
-
-2. **Update Notification** (`src/background/service_worker.ts`):
-   ```typescript
-   async function showNotification(): Promise<void> {
-     // ... existing code
-     await playNotificationSound();
-   }
-   
-   async function playNotificationSound(): Promise<void> {
-     const audio = new Audio(chrome.runtime.getURL('src/assets/sounds/alert.mp3'));
-     await audio.play();
-   }
-   ```
-
-3. **Add Volume/Mute Setting** (`src/shared/types.ts`):
-   ```typescript
-   export interface Settings {
-     // ... existing fields
-     soundEnabled: boolean;
-     soundVolume: number;  // 0-100
-   }
-   ```
-
-**Complexity:** Low (no new permissions needed)
-
-### 11.4 Adding Do Not Disturb Schedule
-
-**Use Case:** Automatically pause during meetings or sleep hours.
-
-**Required Changes:**
-
-1. **Add Schedule Settings** (`src/shared/types.ts`):
-   ```typescript
-   export interface DoNotDisturbSchedule {
-     enabled: boolean;
-     startTime: string;  // "22:00"
-     endTime: string;    // "08:00"
-     days: number[];     // [0, 1, 2, 3, 4, 5, 6] (0 = Sunday)
-   }
-   ```
-
-2. **Check Schedule** (`src/background/service_worker.ts`):
-   ```typescript
-   function isInDoNotDisturb(): boolean {
-     const now = new Date();
-     const currentTime = `${now.getHours()}:${now.getMinutes()}`;
-     const currentDay = now.getDay();
-     
-     // Check if current time is within DND window
-     // and current day is in enabled days
-   }
-   
-   // In alarm handler
-   if (isInDoNotDisturb()) {
-     // Skip notification, reschedule for after DND ends
-   }
-   ```
-
-**Complexity:** Low-Medium
-
-### 11.5 Adding Keyboard Shortcuts
-
-**Use Case:** Quick actions via keyboard (e.g., Ctrl+Shift+B for break now).
-
-**Required Changes:**
-
-1. **Add to Manifest** (`src/manifest.json`):
-   ```json
-   {
-     "commands": {
-       "take-break": {
-         "suggested_key": {
-           "default": "Ctrl+Shift+B"
-         },
-         "description": "Take a break now"
-       }
-     }
-   }
-   ```
-
-2. **Handle Commands** (`src/background/service_worker.ts`):
-   ```typescript
-   chrome.commands.onCommand.addListener(async (command) => {
-     if (command === 'take-break') {
-       await handleTakeBreakNow();
-     }
-   });
-   ```
-
-**Complexity:** Low
-
-### 11.6 Adding Integration with Health Apps
-
-**Use Case:** Sync with Apple Health, Google Fit, etc.
-
-**Required Changes:**
-
-1. **New Permissions**:
-   - Requires `identity` permission for OAuth
-   - External API calls (no new manifest permissions)
-
-2. **OAuth Flow**:
-   - Authenticate with health platform
-   - Store access token securely
-
-3. **Data Sync**:
-   - Periodically sync break data
-   - Convert breaks to health platform format
-
-**Complexity:** High (requires external API integration)
-
----
-
-## 12. KEY DESIGN PATTERNS
-
-### 12.1 Single Source of Truth
-
-**Pattern:** All state lives in Chrome storage. UI layers are views that read from storage.
-
-**Implementation:**
-- Background script owns timer logic and state mutations
-- Popup/options only read from storage and send commands
-- State changes trigger UI updates via message passing
-
-**Benefit:** No state synchronization issues, consistent behavior across all UI contexts.
-
-### 12.2 Defensive Programming
-
-**Pattern:** Validate all inputs, handle errors gracefully, never crash.
-
-**Implementation:**
+**Step 1: Update Types**
 ```typescript
-// Input validation
-const interval = message.payload?.interval as number;
-if (typeof interval !== 'number') return;
-if (interval < MIN_INTERVAL || interval > MAX_INTERVAL) return;
+// src/shared/types.ts
+export type ReminderType = 'eye' | 'water' | 'posture';
+export const REMINDER_TYPES: ReminderType[] = ['eye', 'water', 'posture'];
 
-// Error handling
-try {
-  await chrome.alarms.create(ALARM_NAME, { delayInMinutes });
-} catch (error) {
-  console.error('[Breaksy] Failed to schedule alarm:', error);
+export const DEFAULT_POSTURE_SETTINGS: ReminderSettings = {
+  enabled: false,
+  intervalMinutes: 45,
+  snoozeMinutes: 10,
+  title: 'Time to check posture 🪑',
+  message: 'Sit up straight and roll your shoulders back.',
+};
+```
+
+**Step 2: Update Defaults**
+```typescript
+export const DEFAULT_SETTINGS_V2: SettingsV2 = {
+  version: 2,
+  idleThresholdSeconds: 60,
+  reminders: {
+    eye: { ...DEFAULT_EYE_SETTINGS },
+    water: { ...DEFAULT_WATER_SETTINGS },
+    posture: { ...DEFAULT_POSTURE_SETTINGS },  // Add this
+  },
+  // ...
+};
+```
+
+**Step 3: Update UI**
+Add to reminder selectors in:
+- `src/options/options.html`
+- `src/popup/popup.html`
+
+**Step 4: Migration (Optional)**
+Update `ensureCompleteV2Settings()` to handle existing users without posture settings.
+
+**That's it!** The background script handles the rest automatically.
+
+### 12.2 Adding Daily Statistics
+
+**Storage:**
+```typescript
+interface DailyStats {
+  date: string;  // YYYY-MM-DD
+  breaksTaken: Record<ReminderType, number>;
+  snoozes: Record<ReminderType, number>;
+  pauseDurationMinutes: number;
 }
 ```
 
-### 12.3 Anti-Spam Protection
-
-**Pattern:** Prevent rapid-fire notifications.
-
 **Implementation:**
+- Track in notification handlers
+- Reset at midnight using alarm
+- Display in popup footer
+
+### 12.3 Adding Sound Alerts
+
+**No new permissions needed!**
+
 ```typescript
-if (state.lastNotifiedAt && now - state.lastNotifiedAt < ANTI_SPAM_WINDOW_MS) {
-  console.log('[Breaksy] Skipping notification - within anti-spam window');
-  return;
+async function playNotificationSound(type: ReminderType) {
+  const audio = new Audio(chrome.runtime.getURL(`assets/sounds/${type}.mp3`));
+  await audio.play();
 }
 ```
 
-### 12.4 Browser Restart Recovery
+---
 
-**Pattern:** Persist critical timer state to survive browser restarts.
+## 13. KEY DESIGN PATTERNS
 
-**Implementation:**
-- Store `timerEndsAt` timestamp
-- On startup, calculate remaining time from persisted timestamp
-- Resume countdown or trigger missed notification
+### 13.1 Schema Versioning
 
-### 12.5 Event-Driven Architecture
+Always include version field in stored objects:
+```typescript
+interface SettingsV2 {
+  version: 2;  // Schema version
+  // ... fields
+}
+```
 
-**Pattern:** Use Chrome extension events for all major actions.
+Enables safe migrations and backward compatibility.
 
-**Events Used:**
-- `chrome.runtime.onInstalled` / `onStartup`
-- `chrome.alarms.onAlarm`
-- `chrome.idle.onStateChanged`
-- `chrome.notifications.onButtonClicked` / `onClicked` / `onClosed`
-- `chrome.runtime.onMessage`
+### 13.2 Type-Encoded IDs
 
-### 12.6 Modular TypeScript
+Embed type information in IDs for routing:
+```typescript
+// Alarm names
+'breaksy-reminder:eye'
+'breaksy-reminder:water'
 
-**Pattern:** Strict typing with shared interfaces.
+// Notification IDs
+'breaksy-eye-1234567890'
+'breaksy-water-1234567890'
 
-**Implementation:**
-- Central types in `src/shared/types.ts`
-- Reused across all modules
-- No `any` types (strict mode enabled)
+// Parse functions
+parseAlarmType(name: string): ReminderType | null
+parseNotificationType(id: string): ReminderType | null
+```
+
+### 13.3 Per-Reminder State Isolation
+
+Each reminder has completely independent state:
+```typescript
+state.reminders.eye.isPaused    // Eye paused?
+state.reminders.water.isPaused  // Water paused?
+// Independent!
+```
+
+### 13.4 Global Idle State
+
+Idle detection is global but affects all reminders:
+```typescript
+state.isIdle  // Global state
+// When true: ALL reminders pause
+// When false: ALL enabled, non-paused reminders resume
+```
+
+### 13.5 Defensive Migration
+
+Always fill missing fields with defaults:
+```typescript
+function ensureCompleteV2Settings(settings: Partial<SettingsV2>): SettingsV2 {
+  for (const type of REMINDER_TYPES) {
+    if (!settings.reminders?.[type]) {
+      settings.reminders[type] = getDefaultReminderSettings(type);
+    }
+  }
+}
+```
+
+### 13.6 Deep Merge Updates
+
+Never overwrite full objects with partial updates:
+```typescript
+// Wrong
+await setSettings({ reminders: { eye: newSettings } });  // Deletes water!
+
+// Right
+await setSettings({
+  reminders: {
+    ...current.reminders,
+    eye: { ...current.reminders.eye, ...newSettings }
+  }
+});
+```
 
 ---
 
-## 13. DEBUGGING
+## 14. DEBUGGING
 
-### 13.1 Viewing Extension Logs
+### 14.1 Viewing Logs
 
-**Method 1: Service Worker Console**
-1. Navigate to `chrome://extensions/`
-2. Enable "Developer mode"
-3. Find Breaksy extension
-4. Click on "service worker" link (under "Inspect views")
-5. Console tab shows background script logs
+**Service Worker Console:**
+1. `chrome://extensions/`
+2. Find Breaksy
+3. Click "service worker" link
+4. View Console tab
 
-**Method 2: Popup Console**
-1. Click the Breaksy extension icon
-2. Right-click on the popup
-3. Select "Inspect"
-4. Console tab shows popup logs
+**Popup Console:**
+1. Click Breaksy icon
+2. Right-click → "Inspect"
+3. View Console tab
 
-### 13.2 Common Log Prefixes
+### 14.2 Useful Commands
 
-All logs use consistent prefixes for filtering:
-
-| Prefix | Source | Example |
-|--------|--------|---------|
-| `[Breaksy]` | Background script | `[Breaksy] Alarm scheduled in 1200s` |
-| `[Background]` | Message handler | `[Background] Received message: GET_STATE` |
-| `[Popup]` | Popup script | `[Popup] Requesting state from background...` |
-
-### 13.3 Useful Debugging Commands
-
-**In Service Worker Console:**
 ```javascript
-// Check current alarm
+// Check current alarms
 await chrome.alarms.getAll();
 
 // Check storage
 await chrome.storage.sync.get();
 await chrome.storage.local.get();
 
-// Clear all alarms
-await chrome.alarms.clearAll();
+// Clear specific alarm
+await chrome.alarms.clear('breaksy-reminder:eye');
 
-// Reset extension
+// Reload extension
 chrome.runtime.reload();
 ```
 
-### 13.4 Testing Checklist
+### 14.3 Testing Checklist
 
-- [ ] Extension loads without errors
-- [ ] Popup shows correct countdown
-- [ ] Interval changes update timer
-- [ ] Notifications appear at correct time
-- [ ] Snooze delays next notification
-- [ ] Pause stops countdown
-- [ ] Resume continues countdown
-- [ ] Idle detection pauses timer
-- [ ] After browser restart, timer resumes correctly
-- [ ] Anti-spam prevents duplicate notifications
+**Migration:**
+- [ ] Install v1 extension
+- [ ] Set custom interval
+- [ ] Update to v2
+- [ ] Verify settings migrated to eye reminder
+- [ ] Verify water reminder has defaults (disabled)
 
----
+**Multi-Reminder:**
+- [ ] Enable both reminders
+- [ ] Set different intervals
+- [ ] Verify independent countdowns
+- [ ] Pause one, verify other continues
+- [ ] Verify notifications show correct content
+- [ ] Verify snooze works independently
 
-## 14. CHROME APIs USED
+**Idle Detection:**
+- [ ] Go idle → both reminders pause
+- [ ] Return → both reminders resume
+- [ ] Verify remaining times preserved
 
-### 14.1 API Reference Table
-
-| API | Purpose | Permission | Key Methods |
-|-----|---------|------------|-------------|
-| `chrome.alarms` | Schedule reliable background timers | `alarms` | `create()`, `clear()`, `onAlarm` |
-| `chrome.notifications` | Show break reminder popups | `notifications` | `create()`, `clear()`, button events |
-| `chrome.storage.sync` | Persist settings cross-device | `storage` | `get()`, `set()` |
-| `chrome.storage.local` | Persist runtime state | `storage` | `get()`, `set()` |
-| `chrome.idle` | Detect user inactivity | `idle` | `onStateChanged`, `queryState()` |
-| `chrome.runtime` | Message passing, lifecycle | - | `sendMessage()`, `onMessage`, `onInstalled` |
-
-### 14.2 API Quotas and Limitations
-
-| API | Quota/Limit | Notes |
-|-----|-------------|-------|
-| `chrome.alarms` | No explicit limit | Alarms fire even when computer is asleep |
-| `chrome.notifications` | User-dismissible | `requireInteraction: true` for persistent |
-| `chrome.storage.sync` | 102,400 bytes | Suitable for small settings objects |
-| `chrome.storage.local` | 10,485,760 bytes | 10MB limit, more suitable for state |
-| `chrome.idle` | 15-second minimum | Cannot detect idle faster than 15 seconds |
-
-### 14.3 Service Worker Lifecycle
-
-**Important:** Service workers in Manifest V3 have event-driven lifecycle:
-- **Active:** When event handlers are executing
-- **Inactive:** After ~30 seconds of inactivity (suspended)
-- **Wake:** Chrome wakes service worker when events occur
-
-**Implication:** Never rely on in-memory state. Always persist to storage.
+**Browser Restart:**
+- [ ] Close Chrome mid-countdown
+- [ ] Reopen → verify timers restored
+- [ ] If timer elapsed, verify notification shows
 
 ---
 
-## 15. NEXT STEPS FOR AI ASSISTANCE
+## 15. CHROME APIs USED
 
-### 15.1 How to Use This Manual
+| API | Purpose | Key Methods |
+|-----|---------|-------------|
+| `chrome.alarms` | Schedule multiple alarms | `create()`, `clear()`, `onAlarm` |
+| `chrome.notifications` | Show rich notifications | `create()`, button events |
+| `chrome.storage.sync` | Persist settings | `get()`, `set()` |
+| `chrome.storage.local` | Persist runtime state | `get()`, `set()` |
+| `chrome.idle` | Detect inactivity | `onStateChanged` |
+| `chrome.runtime` | Message passing | `sendMessage()`, `onMessage` |
 
-When working with AI to add features, provide:
+### Quotas
 
-1. **This manual** - Reference this file
-2. **Specific requirements** - Exactly what feature to add
-3. **File paths** - Which files need modification
-4. **Constraints** - Any specific requirements or limitations
+- **Storage sync**: 102,400 bytes (sufficient for settings)
+- **Storage local**: 10,485,760 bytes (10MB, for state)
+- **Alarms**: No explicit limit
+- **Notifications**: User-dismissible, can require interaction
 
-### 15.2 Example Prompts
+---
 
-#### Adding Water Reminder
+## 16. NEXT STEPS FOR AI ASSISTANCE
+
+### 16.1 When Adding Features
+
+Provide:
+1. **This manual** - Architecture reference
+2. **Specific requirements** - Exact feature description
+3. **Current code** - Relevant file paths
+4. **Test cases** - Expected behavior
+
+### 16.2 Example Prompts
+
+**Adding Posture Reminder:**
 ```
-Based on the Breaksy manual, add a water drinking reminder feature:
-- New reminder type alongside existing eye breaks
-- Every 60 minutes by default (configurable 15-240 min)
-- Enable/disable independently from eye breaks
-- Shows "Time to hydrate 💧 - Drink a glass of water" notification
-- Separate snooze duration (default 10 min)
-- Update both popup and options pages
-- Maintain backward compatibility with existing settings
-
-Key files to modify:
-- src/shared/types.ts - Add water reminder types
-- src/shared/storage.ts - Handle migration
-- src/background/service_worker.ts - Support multiple alarms
-- src/options/options.html - Add water settings section
-- src/options/options.ts - Handle water settings
-- src/popup/popup.html - Add water status
-- src/popup/popup.ts - Show water countdown
+Based on the Breaksy architecture, add a posture reminder:
+- Type: 'posture'
+- Default: enabled=false, interval=45min, snooze=10min
+- Title: "Check your posture 🪑"
+- Message: "Sit up straight and roll your shoulders back."
+- Update types, defaults, and UI selectors
+- Follow existing patterns for eye/water
 ```
 
-#### Adding Sound Alerts
+**Adding Statistics:**
 ```
-Based on the Breaksy manual, add optional sound alerts:
-- Play sound when notification appears
+Add daily statistics tracking:
+- Track breaks taken per reminder type
+- Track snooze count per type
+- Track pause duration
+- Reset at midnight
+- Show in popup footer
+- Persist in local storage
+```
+
+**Adding Sounds:**
+```
+Add optional notification sounds:
 - Add soundEnabled boolean to settings (default true)
-- Add soundVolume to settings (0-100, default 50)
-- Add sound file (bell.mp3) to assets
-- Update notification handler to play sound
-- Add sound settings to options page
-- No new permissions needed
-
-Key files:
-- src/shared/types.ts - Add sound settings
-- src/background/service_worker.ts - Play sound in showNotification
-- src/options/options.html - Add sound controls
-- src/options/options.ts - Handle sound settings
+- Add soundVolume (0-100, default 50)
+- Play sound when notification shows
+- Different sound per reminder type (optional)
+- Add toggle in options page
 ```
-
-#### Adding Daily Stats
-```
-Based on the Breaksy manual, add daily statistics tracking:
-- Track: breaks taken, snoozes clicked, pause duration
-- Reset stats daily at midnight
-- Show today's stats in popup footer
-- Show weekly stats in options page
-- Persist stats in local storage
-
-Key files:
-- src/shared/types.ts - Add DailyStats interface
-- src/background/service_worker.ts - Track events, schedule daily reset
-- src/popup/popup.html - Add stats display area
-- src/popup/popup.ts - Show current stats
-- src/options/options.html - Add stats section
-- src/options/options.ts - Display historical stats
-```
-
-### 15.3 Important Notes for AI
-
-1. **Always validate:** Ensure AI validates all inputs against constants
-2. **Error handling:** Require try-catch blocks for all async operations
-3. **Storage:** Remind AI to persist all state changes
-4. **Migration:** If changing data models, require migration logic
-5. **Testing:** Ask AI to suggest test cases for new features
-6. **Permissions:** If new permissions needed, update manifest.json
-7. **TypeScript:** Maintain strict typing, no `any` types
-8. **Logging:** Use `[Breaksy]` prefix for all console logs
 
 ---
 
-## APPENDIX A: FILE LINE REFERENCES
+## APPENDIX A: QUICK REFERENCE
 
-Quick reference for key code locations:
+### Default Values
 
-| File | Line | Content |
-|------|------|---------|
-| `types.ts` | 1-5 | Settings interface |
-| `types.ts` | 7-17 | RuntimeState interface |
-| `types.ts` | 19-22 | Message interface |
-| `types.ts` | 24-33 | MessageType union |
-| `types.ts` | 41-45 | DEFAULT_SETTINGS |
-| `types.ts` | 59-68 | Constants |
-| `storage.ts` | 3-6 | STORAGE_KEYS |
-| `storage.ts` | 8-11 | getSettings() |
-| `service_worker.ts` | 15-19 | onInstalled listener |
-| `service_worker.ts` | 27-50 | initializeExtension() |
-| `service_worker.ts` | 52-80 | restoreState() |
-| `service_worker.ts` | 89-113 | handleIdleStateChange() |
-| `service_worker.ts` | 115-149 | scheduleReminder() |
-| `service_worker.ts` | 156-174 | alarms.onAlarm listener |
-| `service_worker.ts` | 176-224 | showNotification() |
-| `service_worker.ts` | 316-428 | onMessage listener |
-| `popup.ts` | 49-78 | startCountdown() |
-| `popup.ts` | 80-100 | refreshState() |
-| `options.ts` | 20-41 | loadSettings() |
+| Setting | Eye | Water |
+|---------|-----|-------|
+| enabled | true | false |
+| intervalMinutes | 20 | 60 |
+| snoozeMinutes | 5 | 10 |
 
----
+### Validation Ranges
 
-## APPENDIX B: COMMON MESSAGES
+| Field | Min | Max |
+|-------|-----|-----|
+| intervalMinutes | 5 | 240 |
+| snoozeMinutes | 1 | 60 |
+| idleThresholdSeconds | 15 | 600 |
 
-Message passing patterns used throughout:
+### Storage Keys
 
 ```typescript
-// Get state
-const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
+SETTINGS_KEY = 'breaksy-settings'
+STATE_KEY = 'breaksy-state'
+```
 
-// Update interval
-await chrome.runtime.sendMessage({
-  type: 'SET_INTERVAL',
-  payload: { interval: 30 }
-});
+### Alarm Names
 
-// Toggle pause
-await chrome.runtime.sendMessage({ type: 'TOGGLE_PAUSE' });
+```typescript
+'breaksy-reminder:eye'
+'breaksy-reminder:water'
+```
 
-// Immediate break
-await chrome.runtime.sendMessage({ type: 'TAKE_BREAK_NOW' });
+### Notification ID Format
 
-// Snooze
-await chrome.runtime.sendMessage({ type: 'SNOOZE' });
-
-// Resume
-await chrome.runtime.sendMessage({ type: 'RESUME' });
-
-// Reset all
-await chrome.runtime.sendMessage({ type: 'RESET' });
+```typescript
+'breaksy-eye-${timestamp}'
+'breaksy-water-${timestamp}'
 ```
 
 ---
 
-**End of Technical Manual**
+**End of Technical Manual v2.0**
 
 ---
 
-*For updates or questions about this documentation, refer to the codebase or ask an AI assistant with this manual as context.*
+*For questions or issues, refer to the codebase or ask an AI assistant with this manual as context.*
