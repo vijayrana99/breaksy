@@ -13,9 +13,33 @@
       <p class="tagline">Configure your break reminders</p>
     </header>
 
-    <section class="section">
-      <h2 class="section-title">Reminder Settings</h2>
+    <!-- Reminder Type Selector -->
+    <section class="section section-selector">
+      <label class="label" for="reminder-type-select">Select Reminder Type</label>
+      <div class="input-row">
+        <select id="reminder-type-select" class="select select-large">
+          <option value="eye">👀 Eye Break</option>
+          <option value="water">💧 Water Reminder</option>
+        </select>
+      </div>
+    </section>
 
+    <!-- Reminder-Specific Settings -->
+    <section class="section" id="reminder-settings-section">
+      <h2 class="section-title" id="reminder-settings-title">Eye Break Settings</h2>
+
+      <!-- Enabled Toggle -->
+      <div class="field">
+        <label class="label" for="reminder-enabled">Enable Reminder</label>
+        <div class="toggle-wrapper">
+          <input type="checkbox" id="reminder-enabled" class="toggle-input">
+          <span class="toggle-slider"></span>
+          <span class="toggle-label" id="enabled-label">Enabled</span>
+        </div>
+        <p class="hint" id="enabled-hint">Turn on to receive notifications for this reminder</p>
+      </div>
+
+      <!-- Interval Settings -->
       <div class="field">
         <label class="label" for="interval-preset">Interval (minutes)</label>
         <div class="input-row">
@@ -30,12 +54,45 @@
           </select>
           <input type="number" id="interval-custom" class="input input-number hidden" min="5" max="240" value="20">
         </div>
-        <p class="hint">How often to remind you to take a break (5-240 minutes)</p>
+        <p class="hint">How often to remind you (5-240 minutes)</p>
+      </div>
+
+      <!-- Snooze Duration -->
+      <div class="field">
+        <label class="label" for="snooze-duration">Snooze duration (minutes)</label>
+        <input type="number" id="snooze-duration" class="input" min="1" max="60" value="5">
+        <p class="hint">How long to snooze when you click "Snooze"</p>
+      </div>
+
+      <!-- Notification Preview -->
+      <div class="field field-preview">
+        <label class="label">Notification Preview</label>
+        <div class="notification-preview">
+          <div class="preview-title" id="preview-title">Time for an eye break 👀</div>
+          <div class="preview-message" id="preview-message">Look at something ~20 ft / 6 m away for 20 seconds.</div>
+        </div>
+      </div>
+
+      <!-- Eye Break Specific Info -->
+      <div class="field field-info" id="eye-info">
+        <div class="info-box">
+          <strong>20-20-20 Rule</strong>
+          <p>Every 20 minutes, look at something 20 feet away for 20 seconds to reduce eye strain.</p>
+        </div>
+      </div>
+
+      <!-- Water Reminder Specific Info -->
+      <div class="field field-info hidden" id="water-info">
+        <div class="info-box">
+          <strong>Stay Hydrated</strong>
+          <p>Regular water intake helps maintain focus and prevents fatigue during long work sessions.</p>
+        </div>
       </div>
     </section>
 
-    <section class="section">
-      <h2 class="section-title">Idle Detection</h2>
+    <!-- Global Settings -->
+    <section class="section section-global">
+      <h2 class="section-title">Global Settings</h2>
 
       <div class="field">
         <label class="label" for="idle-threshold">Idle threshold (seconds)</label>
@@ -44,16 +101,7 @@
       </div>
     </section>
 
-    <section class="section">
-      <h2 class="section-title">Snooze</h2>
-
-      <div class="field">
-        <label class="label" for="snooze-duration">Snooze duration (minutes)</label>
-        <input type="number" id="snooze-duration" class="input" min="1" max="60" value="5">
-        <p class="hint">How long to snooze when you click "Snooze"</p>
-      </div>
-    </section>
-
+    <!-- Actions -->
     <section class="section section-actions">
       <button id="btn-reset" class="btn btn-danger">Reset to Defaults</button>
     </section>
