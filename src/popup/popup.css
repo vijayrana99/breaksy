@@ -171,3 +171,121 @@ body {
 .link:hover {
   color: #2563eb;
 }
+
+/* Reminder Type Selector */
+.control-group-selector {
+  margin-bottom: 16px;
+}
+
+.select-reminder {
+  font-size: 16px;
+  font-weight: 500;
+  padding: 12px;
+}
+
+/* Status Card Variants */
+.status-card {
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.status-active {
+  background: #eff6ff;
+  border: 2px solid #dbeafe;
+}
+
+.status-paused {
+  background: #fef3c7;
+  border: 2px solid #fde68a;
+}
+
+.status-idle {
+  background: #f3f4f6;
+  border: 2px solid #e5e7eb;
+}
+
+.status-disabled {
+  background: #fee2e2;
+  border: 2px solid #fecaca;
+}
+
+.status-disabled .status-time {
+  color: #dc2626;
+}
+
+/* Status Indicators */
+.status-indicators {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.indicator {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 8px;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.indicator:hover {
+  border-color: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.indicator-icon {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.indicator-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.indicator-status {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  font-variant-numeric: tabular-nums;
+}
+
+.indicator-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.indicator-active .indicator-label {
+  color: #2563eb;
+}
+
+.indicator-paused {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.indicator-paused .indicator-label {
+  color: #f59e0b;
+}
+
+.indicator-disabled {
+  border-color: #d1d5db;
+  background: #f9fafb;
+  opacity: 0.7;
+}
+
+.indicator-disabled .indicator-status {
+  color: #9ca3af;
+}
