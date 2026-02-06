@@ -1,9 +1,9 @@
-# BREAKSY TECHNICAL MANUAL
+A# BREAKSY TECHNICAL MANUAL
 ## Chrome Extension Architecture Documentation
 
-**Version:** 2.1.0  
+**Version:** 2.0.0  
 **Last Updated:** February 6, 2026  
-**Extension Version:** 2.1.0
+**Extension Version:** 2.0.0
 
 ---
 
@@ -20,12 +20,11 @@
 9. [Popup Interface](#9-popup-interface)
 10. [Options Page](#10-options-page)
 11. [Build System](#11-build-system)
-12. [Badge & Counter Display Architecture](#12-badge--counter-display-architecture)
-13. [Extension Points for New Features](#13-extension-points-for-new-features)
-14. [Key Design Patterns](#14-key-design-patterns)
-15. [Debugging](#15-debugging)
-16. [Chrome APIs Used](#16-chrome-apis-used)
-17. [Next Steps for AI Assistance](#17-next-steps-for-ai-assistance)
+12. [Extension Points for New Features](#12-extension-points-for-new-features)
+13. [Key Design Patterns](#13-key-design-patterns)
+14. [Debugging](#14-debugging)
+15. [Chrome APIs Used](#15-chrome-apis-used)
+16. [Next Steps for AI Assistance](#16-next-steps-for-ai-assistance)
 
 ---
 
@@ -45,9 +44,6 @@
 - **Idle Detection**: Global idle state pauses all active reminders
 - **Persistent State**: Survives browser restarts with accurate timer restoration
 - **Migration Support**: Seamless upgrade from v1.0 to v2.0
-- **Dual Counter Display**: Shows countdown for all reminders simultaneously in popup
-- **Extension Icon Badge**: Displays time until next notification on toolbar icon
-- **Counter Display Settings**: Per-reminder visibility controls for popup and badge
 
 ### Tech Stack
 - **TypeScript** - Type-safe JavaScript with strict mode
@@ -72,12 +68,9 @@
 
 ### UI Enhancements
 - **Reminder Selector**: Top-level selector in both popup and options
-- **Dual Counter Display**: Shows countdown for all enabled reminders simultaneously in popup
 - **Status Indicators**: Mini indicators showing all reminder statuses simultaneously
-- **Extension Icon Badge**: Toolbar icon shows time until next notification with color coding
 - **Toggle Switches**: Enable/disable reminders with visual toggle
 - **Notification Preview**: See notification content before it triggers
-- **Counter Display Settings**: Per-reminder controls for popup visibility and badge inclusion
 
 ### Backward Compatibility
 - Existing users' settings automatically migrate
@@ -94,7 +87,8 @@ breaksy/
 ├── src/
 │   ├── manifest.json              # Extension manifest (permissions, entry points)
 │   ├── background/
-│   │   └── service_worker.ts      # Main background logic (compiled to background.js)
+│   │   ├── service_worker.ts      # Main background logic with multi-reminder support
+│   │   └── background.js          # Compiled service worker (JavaScript)
 │   ├── popup/
 │   │   ├── popup.html             # Popup UI HTML with reminder selector
 │   │   ├── popup.ts               # Popup logic with per-reminder countdown
@@ -188,19 +182,8 @@ export interface ReminderSettings {
   snoozeMinutes: number;       // Snooze duration (1-60 min)
   title: string;               // Notification title
   message: string;             // Notification message
-  counterDisplay: CounterDisplaySettings;  // Counter visibility settings
-}
-
-export interface CounterDisplaySettings {
-  enabled: boolean;            // Show countdown in popup
-  showInBadge: boolean;        // Include in extension badge
-  badgePriority: 'high' | 'low';  // Which wins if conflict
 }
 ```
-
-**Default Counter Display Settings:**
-- Eye: `{ enabled: true, showInBadge: true, badgePriority: 'high' }`
-- Water: `{ enabled: true, showInBadge: true, badgePriority: 'low' }`
 
 **Defaults:**
 - **Eye**: enabled=true, interval=20, snooze=5
@@ -220,36 +203,7 @@ export interface ReminderRuntimeState {
 }
 ```
 
-### 5.4 Counter Display Info
-
-```typescript
-export interface ReminderCounterInfo {
-  showCounter: boolean;            // Whether to display in popup
-  remainingMinutes: number;        // Minutes until next notification
-  remainingSeconds: number;        // Seconds for precise countdown
-  status: 'active' | 'paused' | 'disabled' | 'idle' | 'notification';
-}
-```
-
-### 5.5 Badge Info
-
-```typescript
-export interface BadgeInfo {
-  minutes: number;                 // Minutes to display
-  source: ReminderType | null;     // Which reminder (null if multiple)
-  urgency: 'normal' | 'warning' | 'urgent';
-  showBadge: boolean;              // Whether to show badge at all
-}
-```
-
-**Badge Display Rules:**
-- `>= 10 minutes`: Integer only (e.g., "15")
-- `< 10 minutes`: One decimal (e.g., "5.2")
-- `< 1 minute`: "<1"
-- Notification active: "!"
-- Colors: Normal (gray), Warning <5min (yellow), Urgent <1min (red)
-
-### 5.6 Settings Schema v2
+### 5.4 Settings Schema v2
 
 ```typescript
 export interface SettingsV2 {
@@ -262,7 +216,7 @@ export interface SettingsV2 {
 }
 ```
 
-### 5.7 Runtime State Schema v2
+### 5.5 Runtime State Schema v2
 
 ```typescript
 export interface RuntimeStateV2 {
@@ -273,19 +227,7 @@ export interface RuntimeStateV2 {
 }
 ```
 
-### 5.8 State Response
-
-```typescript
-export interface StateResponse {
-  settings: SettingsV2;
-  state: RuntimeStateV2;
-  remainingSecondsByType: Record<ReminderType, number>;
-  counterInfo: Record<ReminderType, ReminderCounterInfo>;  // NEW: Counter display data
-  badgeInfo: BadgeInfo | null;                              // NEW: Badge display data
-}
-```
-
-### 5.9 Legacy V1 Types (For Migration)
+### 5.6 Legacy V1 Types (For Migration)
 
 ```typescript
 // V1 - Single reminder
@@ -304,7 +246,7 @@ export interface RuntimeStateV1 {
 }
 ```
 
-### 5.10 Constants
+### 5.7 Constants
 
 ```typescript
 export const MIN_INTERVAL = 5;
@@ -480,21 +422,17 @@ async function handleIdleStateChange(state: IdleState) {
 
 ### 7.5 Key Functions Reference
 
-| Function | Purpose |
-|----------|---------|
-| `initializeExtension()` | Setup on install |
-| `restoreState()` | Restore after browser restart |
-| `scheduleReminder(type, delayMs)` | Schedule alarm for specific reminder |
-| `clearReminderAlarm(type)` | Cancel alarm for specific reminder |
-| `showReminderNotification(type)` | Show notification with type-specific content |
-| `handleSnooze(type)` | Snooze specific reminder |
-| `pauseReminder(type)` | Pause specific reminder |
-| `resumeReminder(type)` | Resume specific reminder |
-| `handleIdleStateChange()` | Global idle handling |
-| `updateBadge()` | Update extension icon badge |
-| `calculateBadgeInfo()` | Calculate badge display data |
-| `formatBadgeText(minutes)` | Format minutes to badge text |
-| `calculateCounterInfo()` | Calculate counter display data |
+| Function | Line | Purpose |
+|----------|------|---------|
+| `initializeExtension()` | - | Setup on install |
+| `restoreState()` | - | Restore after browser restart |
+| `scheduleReminder(type, delayMs)` | - | Schedule alarm for specific reminder |
+| `clearReminderAlarm(type)` | - | Cancel alarm for specific reminder |
+| `showReminderNotification(type)` | - | Show notification with type-specific content |
+| `handleSnooze(type)` | - | Snooze specific reminder |
+| `pauseReminder(type)` | - | Pause specific reminder |
+| `resumeReminder(type)` | - | Resume specific reminder |
+| `handleIdleStateChange()` | - | Global idle handling |
 
 ---
 
@@ -510,7 +448,6 @@ export type MessageType =
   // Type-aware reminder commands
   | 'SET_REMINDER_INTERVAL'      // payload: { reminderType, interval }
   | 'SET_REMINDER_SNOOZE'        // payload: { reminderType, snooze }
-  | 'SET_COUNTER_DISPLAY'        // payload: { reminderType, counterDisplay } - NEW
   | 'TOGGLE_REMINDER_ENABLED'    // payload: { reminderType, enabled }
   | 'TOGGLE_REMINDER_PAUSE'      // payload: { reminderType }
   | 'REMINDER_TRIGGER_NOW'       // payload: { reminderType }
@@ -539,9 +476,7 @@ interface StateResponse {
   settings: SettingsV2;
   state: RuntimeStateV2;
   remainingSecondsByType: Record<ReminderType, number>;
-  counterInfo: Record<ReminderType, ReminderCounterInfo>;  // Display data for counters
-  badgeInfo: BadgeInfo | null;                              // Badge display data
-  // Example remainingSecondsByType: { eye: 1200, water: 3600 }
+  // Example: { eye: 1200, water: 3600 }
 }
 ```
 
@@ -568,19 +503,6 @@ await chrome.runtime.sendMessage({
   type: 'REMINDER_SNOOZE',
   payload: { reminderType: 'water' }
 });
-
-// Update counter display settings for eye reminder
-await chrome.runtime.sendMessage({
-  type: 'SET_COUNTER_DISPLAY',
-  payload: {
-    reminderType: 'eye',
-    counterDisplay: {
-      enabled: true,
-      showInBadge: true,
-      badgePriority: 'high'
-    }
-  }
-});
 ```
 
 ---
@@ -589,17 +511,21 @@ await chrome.runtime.sendMessage({
 
 ### 9.1 Features
 
-**Dual Counter Display:**
-- Shows countdown for ALL enabled reminders simultaneously
-- Format: "Next in: MM:SS min" for each reminder
-- Simple status: Active, Paused, Idle, Disabled, or Notification!
-- Click disabled reminder to open settings
-
 **Reminder Type Selector:**
 - Dropdown at top: "👀 Eye Break" | "💧 Water"
 - Persists selection to settings
 - Updates all UI elements for selected type
-- Determines which reminder actions apply to
+
+**Status Card:**
+- Shows countdown for selected reminder
+- Contextual label: "Next break in:" or "Next drink in:"
+- States: Active (blue), Paused (yellow), Idle (gray), Disabled (red)
+
+**Mini Status Indicators:**
+- Shows both reminders simultaneously
+- Eye icon with countdown | Water icon with countdown
+- Click to switch reminder type
+- Color coding: Active (blue), Paused (yellow), Disabled (gray)
 
 **Action Buttons:**
 - Contextual trigger: "Take Break Now" (eye) / "Drink Water Now" (water)
@@ -611,79 +537,25 @@ await chrome.runtime.sendMessage({
 - Custom input (5-240 range)
 - Applies to selected reminder only
 
-### 9.2 Dual Counter Layout
-
-```
-┌─────────────────────────────┐
-│  [👀 Eye]  [💧 Water]      │  ← Segmented control
-├─────────────────────────────┤
-│                             │
-│  👀 Eye Break               │
-│  Next in: 12:34 min         │  ← Eye countdown
-│  Active                     │
-│                             │
-│  ─────────────────────      │
-│                             │
-│  💧 Water Reminder          │
-│  Next in: 45:20 min         │  ← Water countdown
-│  Active                     │
-│                             │
-├─────────────────────────────┤
-│  [Take Break Now]           │  ← Action for SELECTED
-├─────────────────────────────┤
-│  [Snooze 5 min] [Pause]     │  ← Actions for SELECTED
-├─────────────────────────────┤
-│  Interval: [20 min ▼]       │  ← Setting for SELECTED
-└─────────────────────────────┘
-```
-
-### 9.3 Local Countdown Implementation
-
-The popup uses a local countdown mechanism for smooth UI updates:
+### 9.2 Countdown Implementation
 
 ```typescript
-// Track remaining seconds locally for each reminder
-let localRemainingSeconds: Record<ReminderType, number> = {
-  eye: 0,
-  water: 0,
-};
-
-// Initialize from state
-function updateLocalCountdown() {
-  for (const type of REMINDER_TYPES) {
-    const counterInfo = currentState.counterInfo?.[type];
-    if (counterInfo) {
-      localRemainingSeconds[type] = counterInfo.remainingSeconds;
+// Decrement each reminder independently
+for (const type of REMINDER_TYPES) {
+  if (enabled && !paused && !idle) {
+    displaySecondsByType[type]--;
+    if (displaySecondsByType[type] <= 0) {
+      // Trigger check for this specific reminder
+      await chrome.runtime.sendMessage({
+        type: 'CHECK_NOTIFICATION',
+        payload: { reminderType: type }
+      });
     }
   }
 }
 
-// Countdown timer (1 second interval)
-setInterval(() => {
-  for (const type of REMINDER_TYPES) {
-    const counterInfo = currentState.counterInfo?.[type];
-    
-    // Only decrement active timers
-    if (counterInfo?.status === 'active' && localRemainingSeconds[type] > 0) {
-      localRemainingSeconds[type]--;
-      
-      // Check if timer reached zero
-      if (localRemainingSeconds[type] <= 0) {
-        refreshState();  // Sync with background
-      }
-    }
-  }
-  
-  // Update display
-  updateCounterDisplay('eye');
-  updateCounterDisplay('water');
-}, 1000);
+// Refresh state every 10 seconds to correct drift
 ```
-
-**Benefits:**
-- Smooth countdown without constant background sync
-- Reduces message passing overhead
-- Refreshes from background when timer reaches zero
 
 ---
 
@@ -700,9 +572,6 @@ setInterval(() => {
 - **Enable Toggle**: Visual switch with on/off state
 - **Interval**: Preset dropdown + custom input (5-240 min)
 - **Snooze Duration**: Number input (1-60 min)
-- **Counter Display**: 
-  - Checkbox: "Show countdown in popup"
-  - Checkbox: "Include in extension badge"
 - **Notification Preview**: Shows title/message for selected reminder
 - **Info Box**: Contextual tips (20-20-20 rule for eye, hydration tips for water)
 
@@ -712,78 +581,28 @@ setInterval(() => {
 **Actions:**
 - **Reset to Defaults**: Resets ALL reminders to defaults
 
-### 10.2 Counter Display Settings UI
-
-```html
-<div class="field">
-  <label class="label">Counter Display</label>
-  <div class="checkbox-wrapper">
-    <input type="checkbox" id="counter-show-in-popup">
-    <span class="checkbox-label">Show countdown in popup</span>
-  </div>
-  <div class="checkbox-wrapper">
-    <input type="checkbox" id="counter-show-in-badge">
-    <span class="checkbox-label">Include in extension badge</span>
-  </div>
-  <p class="hint">Configure how this reminder appears</p>
-</div>
-```
-
-### 10.3 Dynamic UI Updates
+### 10.2 Dynamic UI Updates
 
 When reminder type changes:
 1. Load settings for selected type
 2. Update all form fields
-3. Update counter display checkboxes
-4. Update notification preview
-5. Show/hide contextual info box
-6. Persist selection
+3. Update notification preview
+4. Show/hide contextual info box
+5. Persist selection
 
 ---
 
 ## 11. BUILD SYSTEM
 
-### 11.1 Vite Configuration
-
-**vite.config.ts:**
-```typescript
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  base: './',
-  build: {
-    outDir: 'dist',
-    emptyOutDir: true,
-    rollupOptions: {
-      input: {
-        popup: 'src/popup/popup.html',
-        options: 'src/options/options.html',
-        background: 'src/background/service_worker.ts',  // Compiles service worker
-      },
-      output: {
-        entryFileNames: 'src/[name]/[name].js',
-        chunkFileNames: 'src/[name]/[name]-[hash].js',
-        assetFileNames: 'src/[name]/[name]-[hash].[ext]',
-      },
-    },
-  },
-});
-```
-
-### 11.2 Build Scripts
+### 11.1 Scripts
 
 ```json
 {
-  "build": "vite build && cp src/manifest.json dist/ && mkdir -p dist/src/assets && cp -r src/assets/* dist/src/assets/",
+  "build": "vite build && mkdir -p dist/src/background && cp src/manifest.json dist/ && cp src/background/background.js dist/src/background/ && cp -r src/assets/* dist/src/assets/",
   "watch": "vite build --watch",
   "typecheck": "tsc --noEmit"
 }
 ```
-
-**Key Changes:**
-- Service worker now compiled from TypeScript (`service_worker.ts`)
-- No longer copying old `background.js` - it's built by Vite
-- Background entry point configured in vite.config.ts
 
 ### 11.2 Loading in Chrome
 
@@ -795,105 +614,7 @@ export default defineConfig({
 
 ---
 
-## 12. BADGE & COUNTER DISPLAY ARCHITECTURE
-
-### 12.1 Extension Icon Badge System
-
-The badge on the Chrome extension icon displays the time until the next notification.
-
-**Badge Update Flow:**
-1. Calculate `badgeInfo` from current settings and state
-2. Determine minimum time across all enabled, badge-enabled reminders
-3. Format text based on time remaining
-4. Set color based on urgency level
-5. Update on every state change (schedule, fire, pause, resume, idle, snooze)
-
-**Key Functions:**
-
-```typescript
-// Calculate badge display info
-function calculateBadgeInfo(
-  settings: SettingsV2,
-  state: RuntimeStateV2
-): BadgeInfo | null;
-
-// Format minutes to badge text
-function formatBadgeText(minutes: number): string;
-// >= 10: "15" (integer)
-// < 10: "5.2" (decimal)
-// < 1: "<1"
-// notification: "!"
-
-// Get color for urgency level
-function getBadgeColor(urgency: 'normal' | 'warning' | 'urgent'): string;
-// normal: '#6B7280' (gray)
-// warning: '#F59E0B' (yellow/orange, < 5 min)
-// urgent: '#DC2626' (red, < 1 min)
-
-// Main badge update function
-async function updateBadge(): Promise<void>;
-```
-
-**Badge Priority:**
-When multiple reminders want to display on the badge:
-1. Filter by `counterDisplay.showInBadge === true`
-2. Filter by `enabled === true`
-3. Find minimum remaining time
-4. If tie, reminder with `badgePriority: 'high'` wins
-
-### 12.2 Counter Display System
-
-The popup shows dual counters for all reminders with independent settings.
-
-**Counter Info Calculation:**
-
-```typescript
-function calculateCounterInfo(
-  settings: SettingsV2,
-  state: RuntimeStateV2
-): Record<ReminderType, ReminderCounterInfo>;
-
-// Returns for each reminder type:
-{
-  showCounter: boolean,        // Based on counterDisplay.enabled
-  remainingMinutes: number,    // Calculated from timerEndsAt or remainingMs
-  remainingSeconds: number,    // Precise for countdown
-  status: 'active' | 'paused' | 'disabled' | 'idle' | 'notification'
-}
-```
-
-**Status Determination:**
-1. **disabled**: `reminderSettings.enabled === false`
-2. **notification**: `reminderState.activeNotificationId !== null`
-3. **idle**: `state.isIdle === true`
-4. **paused**: `reminderState.isPaused === true`
-5. **active**: Default state when none of above
-
-**Counter Settings Per Reminder:**
-
-```typescript
-interface CounterDisplaySettings {
-  enabled: boolean;            // Show in popup
-  showInBadge: boolean;        // Include in badge
-  badgePriority: 'high' | 'low';  // Badge tie-breaker
-}
-```
-
-### 12.3 Integration Points
-
-Badge updates are triggered from:
-- `scheduleReminder()` - After scheduling alarm
-- `handleReminderFired()` - After notification fires
-- `handleSnooze()` - After snooze
-- `pauseReminder()` / `resumeReminder()` - After pause state changes
-- `handleIdleStateChange()` - After idle/active transition
-- `SET_COUNTER_DISPLAY` handler - After settings change
-
-Counter info is returned in `GET_STATE` response for popup display.
-
----
-
-## 13. EXTENSION POINTS FOR NEW FEATURES
+## 12. EXTENSION POINTS FOR NEW FEATURES
 
 ### 12.1 Adding a New Reminder Type (e.g., Posture)
 
@@ -966,7 +687,7 @@ async function playNotificationSound(type: ReminderType) {
 
 ---
 
-## 14. KEY DESIGN PATTERNS
+## 13. KEY DESIGN PATTERNS
 
 ### 13.1 Schema Versioning
 
@@ -1046,7 +767,7 @@ await setSettings({
 
 ---
 
-## 15. DEBUGGING
+## 14. DEBUGGING
 
 ### 14.1 Viewing Logs
 
@@ -1071,16 +792,8 @@ await chrome.alarms.getAll();
 await chrome.storage.sync.get();
 await chrome.storage.local.get();
 
-// Check badge status
-await chrome.action.getBadgeText({});
-await chrome.action.getBadgeBackgroundColor({});
-
 // Clear specific alarm
 await chrome.alarms.clear('breaksy-reminder:eye');
-
-// Manually set badge (for testing)
-await chrome.action.setBadgeText({ text: '5' });
-await chrome.action.setBadgeBackgroundColor({ color: '#F59E0B' });
 
 // Reload extension
 chrome.runtime.reload();
@@ -1113,19 +826,9 @@ chrome.runtime.reload();
 - [ ] Reopen → verify timers restored
 - [ ] If timer elapsed, verify notification shows
 
-**Badge & Counter Display:**
-- [ ] Enable both reminders, verify badge shows sooner time
-- [ ] Verify badge color changes (gray → yellow → red)
-- [ ] Disable all reminders, verify badge clears
-- [ ] Open popup, verify both counters display
-- [ ] Verify counters count down smoothly (1 second intervals)
-- [ ] Disable counter display for one reminder in settings
-- [ ] Verify disabled reminder hidden from popup
-- [ ] Change badge priority settings, verify correct reminder shown
-
 ---
 
-## 16. CHROME APIs USED
+## 15. CHROME APIs USED
 
 | API | Purpose | Key Methods |
 |-----|---------|-------------|
@@ -1135,7 +838,6 @@ chrome.runtime.reload();
 | `chrome.storage.local` | Persist runtime state | `get()`, `set()` |
 | `chrome.idle` | Detect inactivity | `onStateChanged` |
 | `chrome.runtime` | Message passing | `sendMessage()`, `onMessage` |
-| `chrome.action` | Extension icon badge | `setBadgeText()`, `setBadgeBackgroundColor()` |
 
 ### Quotas
 
@@ -1146,7 +848,7 @@ chrome.runtime.reload();
 
 ---
 
-## 17. NEXT STEPS FOR AI ASSISTANCE
+## 16. NEXT STEPS FOR AI ASSISTANCE
 
 ### 16.1 When Adding Features
 
@@ -1201,9 +903,6 @@ Add optional notification sounds:
 | enabled | true | false |
 | intervalMinutes | 20 | 60 |
 | snoozeMinutes | 5 | 10 |
-| counterDisplay.enabled | true | true |
-| counterDisplay.showInBadge | true | true |
-| counterDisplay.badgePriority | high | low |
 
 ### Validation Ranges
 
@@ -1233,17 +932,6 @@ STATE_KEY = 'breaksy-state'
 'breaksy-eye-${timestamp}'
 'breaksy-water-${timestamp}'
 ```
-
-### Badge Format Specifications
-
-| Time Remaining | Format | Example | Color |
-|----------------|--------|---------|-------|
-| >= 10 minutes | Integer | "15" | Gray |
-| < 10 minutes | One decimal | "5.2" | Gray |
-| < 5 minutes | One decimal | "4.3" | Yellow |
-| < 1 minute | "<1" | "<1" | Red |
-| Notification active | "!" | "!" | Red |
-| All disabled | Hidden | - | - |
 
 ---
 

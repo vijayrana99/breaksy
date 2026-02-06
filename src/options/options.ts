@@ -21,7 +21,7 @@ import {
 const ELEMENTS = {
   // Reminder type selector
   reminderTypeSelect: document.getElementById('reminder-type-select') as HTMLSelectElement,
-  
+
   // Reminder-specific UI elements
   reminderSettingsTitle: document.getElementById('reminder-settings-title') as HTMLElement,
   reminderEnabled: document.getElementById('reminder-enabled') as HTMLInputElement,
@@ -30,18 +30,22 @@ const ELEMENTS = {
   intervalPreset: document.getElementById('interval-preset') as HTMLSelectElement,
   intervalCustom: document.getElementById('interval-custom') as HTMLInputElement,
   snoozeDuration: document.getElementById('snooze-duration') as HTMLInputElement,
-  
+
+  // Counter display settings
+  counterShowInPopup: document.getElementById('counter-show-in-popup') as HTMLInputElement,
+  counterShowInBadge: document.getElementById('counter-show-in-badge') as HTMLInputElement,
+
   // Preview
   previewTitle: document.getElementById('preview-title') as HTMLElement,
   previewMessage: document.getElementById('preview-message') as HTMLElement,
-  
+
   // Info boxes
   eyeInfo: document.getElementById('eye-info') as HTMLElement,
   waterInfo: document.getElementById('water-info') as HTMLElement,
-  
+
   // Global settings
   idleThreshold: document.getElementById('idle-threshold') as HTMLInputElement,
-  
+
   // Actions
   btnReset: document.getElementById('btn-reset') as HTMLButtonElement,
 } as const;
@@ -120,7 +124,11 @@ function updateUI(): void {
   
   // Update snooze
   ELEMENTS.snoozeDuration.value = reminderSettings.snoozeMinutes.toString();
-  
+
+  // Update counter display settings
+  ELEMENTS.counterShowInPopup.checked = reminderSettings.counterDisplay?.enabled ?? true;
+  ELEMENTS.counterShowInBadge.checked = reminderSettings.counterDisplay?.showInBadge ?? true;
+
   // Update preview
   const content = getNotificationContent(currentReminderType);
   ELEMENTS.previewTitle.textContent = content.title;
@@ -226,7 +234,33 @@ function setupEventListeners(): void {
       ELEMENTS.snoozeDuration.value = currentReminderType === 'eye' ? '5' : '10';
     }
   });
-  
+
+  // Counter display - show in popup
+  ELEMENTS.counterShowInPopup.addEventListener('change', async () => {
+    const enabled = ELEMENTS.counterShowInPopup.checked;
+    await sendMessage('SET_COUNTER_DISPLAY', {
+      reminderType: currentReminderType,
+      counterDisplay: {
+        enabled,
+        showInBadge: ELEMENTS.counterShowInBadge.checked,
+        badgePriority: currentReminderType === 'eye' ? 'high' : 'low',
+      },
+    });
+  });
+
+  // Counter display - show in badge
+  ELEMENTS.counterShowInBadge.addEventListener('change', async () => {
+    const showInBadge = ELEMENTS.counterShowInBadge.checked;
+    await sendMessage('SET_COUNTER_DISPLAY', {
+      reminderType: currentReminderType,
+      counterDisplay: {
+        enabled: ELEMENTS.counterShowInPopup.checked,
+        showInBadge,
+        badgePriority: currentReminderType === 'eye' ? 'high' : 'low',
+      },
+    });
+  });
+
   // Idle threshold (global)
   ELEMENTS.idleThreshold.addEventListener('change', async () => {
     const value = parseInt(ELEMENTS.idleThreshold.value, 10);

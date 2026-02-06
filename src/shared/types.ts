@@ -21,6 +21,18 @@ export const REMINDER_TYPES: ReminderType[] = ['eye', 'water'];
 // ============================================================================
 
 /**
+ * Counter display settings for an individual reminder type
+ */
+export interface CounterDisplaySettings {
+  /** Whether to show countdown in popup */
+  enabled: boolean;
+  /** Whether to include in extension badge calculation */
+  showInBadge: boolean;
+  /** Badge priority when both reminders want badge */
+  badgePriority: 'high' | 'low';
+}
+
+/**
  * Settings for an individual reminder type
  */
 export interface ReminderSettings {
@@ -34,6 +46,8 @@ export interface ReminderSettings {
   title: string;
   /** Notification message template */
   message: string;
+  /** Counter display settings */
+  counterDisplay: CounterDisplaySettings;
 }
 
 /**
@@ -134,6 +148,15 @@ export type RuntimeState = RuntimeStateV2;
 // ============================================================================
 
 /**
+ * Default counter display settings
+ */
+export const DEFAULT_COUNTER_DISPLAY_SETTINGS: CounterDisplaySettings = {
+  enabled: true,
+  showInBadge: true,
+  badgePriority: 'high',
+};
+
+/**
  * Default settings for eye break reminder
  */
 export const DEFAULT_EYE_SETTINGS: ReminderSettings = {
@@ -142,6 +165,7 @@ export const DEFAULT_EYE_SETTINGS: ReminderSettings = {
   snoozeMinutes: 5,
   title: 'Time for an eye break 👀',
   message: 'Look at something ~20 ft / 6 m away for 20 seconds.',
+  counterDisplay: { ...DEFAULT_COUNTER_DISPLAY_SETTINGS, badgePriority: 'high' },
 };
 
 /**
@@ -153,6 +177,7 @@ export const DEFAULT_WATER_SETTINGS: ReminderSettings = {
   snoozeMinutes: 10,
   title: 'Time to hydrate 💧',
   message: 'Drink a glass of water.',
+  counterDisplay: { ...DEFAULT_COUNTER_DISPLAY_SETTINGS, badgePriority: 'low' },
 };
 
 /**
@@ -325,6 +350,7 @@ export type MessageType =
   // Type-aware reminder commands
   | 'SET_REMINDER_INTERVAL'
   | 'SET_REMINDER_SNOOZE'
+  | 'SET_COUNTER_DISPLAY'
   | 'TOGGLE_REMINDER_PAUSE'
   | 'TOGGLE_REMINDER_ENABLED'
   | 'REMINDER_TRIGGER_NOW'
@@ -342,12 +368,44 @@ export type MessageType =
   | 'RESUME';
 
 /**
+ * Counter info for display in popup
+ */
+export interface ReminderCounterInfo {
+  /** Whether countdown should be shown */
+  showCounter: boolean;
+  /** Minutes remaining until next notification */
+  remainingMinutes: number;
+  /** Seconds remaining for precise display */
+  remainingSeconds: number;
+  /** Current status */
+  status: 'active' | 'paused' | 'disabled' | 'idle' | 'notification';
+}
+
+/**
+ * Badge display info
+ */
+export interface BadgeInfo {
+  /** Minutes to display on badge */
+  minutes: number;
+  /** Which reminder type is shown (null if mixed) */
+  source: ReminderType | null;
+  /** Urgency level for color */
+  urgency: 'normal' | 'warning' | 'urgent';
+  /** Whether badge should be shown at all */
+  showBadge: boolean;
+}
+
+/**
  * Response shape for GET_STATE
  */
 export interface StateResponse {
   settings: SettingsV2;
   state: RuntimeStateV2;
   remainingSecondsByType: Record<ReminderType, number>;
+  /** Counter info for each reminder type */
+  counterInfo: Record<ReminderType, ReminderCounterInfo>;
+  /** Badge display info */
+  badgeInfo: BadgeInfo | null;
 }
 
 // ============================================================================

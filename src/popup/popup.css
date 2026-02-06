@@ -62,45 +62,79 @@ body {
   font-weight: 500;
 }
 
-/* Status Display */
-.status-display {
-  text-align: center;
+/* Counters Container */
+.counters-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   padding: 8px 0;
 }
 
-.status-word {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #6B7280;
-  margin-bottom: 2px;
-  min-height: 16px;
+.counter-item {
+  padding: 12px;
+  background: #F8FAFC;
+  border-radius: 10px;
+  border: 1px solid #E2E8F0;
 }
 
-.status-word.status-paused {
+.counter-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.counter-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.counter-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0F172A;
+}
+
+.counter-time {
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: #2563EB;
+  margin-bottom: 4px;
+}
+
+.counter-status {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.counter-status.status-active {
+  color: #10B981;
+}
+
+.counter-status.status-paused {
   color: #F59E0B;
 }
 
-.status-word.status-idle {
+.counter-status.status-idle {
   color: #6B7280;
 }
 
-.status-word.status-disabled {
+.counter-status.status-disabled {
   color: #DC2626;
 }
 
-.status-time {
-  font-size: 36px;
+.counter-status.status-notification {
+  color: #DC2626;
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: #0F172A;
-  line-height: 1.1;
 }
 
-.status-suffix {
-  font-size: 12px;
-  color: #6B7280;
-  margin-top: 2px;
+.counter-divider {
+  height: 1px;
+  background: #E2E8F0;
+  margin: 4px 0;
 }
 
 /* Buttons */

@@ -10,6 +10,9 @@ import {
   ANTI_SPAM_WINDOW_MS,
   RuntimeStateV2,
   DEFAULT_SETTINGS_V2,
+  ReminderCounterInfo,
+  BadgeInfo,
+  SettingsV2,
 } from '../shared/types';
 import {
   getSettings,
@@ -23,6 +26,185 @@ import {
 
 let idleListenerAdded = false;
 let isInitialized = false;
+
+// ============================================================================
+// BADGE MANAGEMENT
+// ============================================================================
+
+/**
+ * Calculate counter info for display in popup
+ */
+function calculateCounterInfo(
+  settings: SettingsV2,
+  state: RuntimeStateV2,
+  now: number = Date.now()
+): Record<ReminderType, ReminderCounterInfo> {
+  const result: Partial<Record<ReminderType, ReminderCounterInfo>> = {};
+
+  for (const type of REMINDER_TYPES) {
+    const reminderSettings = settings.reminders[type];
+    const reminderState = state.reminders[type];
+
+    if (!reminderSettings.enabled) {
+      result[type] = {
+        showCounter: reminderSettings.counterDisplay?.enabled ?? true,
+        remainingMinutes: 0,
+        remainingSeconds: 0,
+        status: 'disabled',
+      };
+    } else if (reminderState.activeNotificationId) {
+      result[type] = {
+        showCounter: reminderSettings.counterDisplay?.enabled ?? true,
+        remainingMinutes: 0,
+        remainingSeconds: 0,
+        status: 'notification',
+      };
+    } else if (state.isIdle) {
+      const remainingMs = reminderState.remainingMs ?? 0;
+      result[type] = {
+        showCounter: reminderSettings.counterDisplay?.enabled ?? true,
+        remainingMinutes: remainingMs / 60000,
+        remainingSeconds: Math.ceil(remainingMs / 1000),
+        status: 'idle',
+      };
+    } else if (reminderState.isPaused) {
+      const remainingMs = reminderState.remainingMs ?? 0;
+      result[type] = {
+        showCounter: reminderSettings.counterDisplay?.enabled ?? true,
+        remainingMinutes: remainingMs / 60000,
+        remainingSeconds: Math.ceil(remainingMs / 1000),
+        status: 'paused',
+      };
+    } else {
+      // Active - calculate remaining time
+      let remainingMs = reminderState.remainingMs ?? 0;
+      if (reminderState.timerEndsAt) {
+        remainingMs = Math.max(0, reminderState.timerEndsAt - now);
+      }
+      result[type] = {
+        showCounter: reminderSettings.counterDisplay?.enabled ?? true,
+        remainingMinutes: remainingMs / 60000,
+        remainingSeconds: Math.ceil(remainingMs / 1000),
+        status: 'active',
+      };
+    }
+  }
+
+  return result as Record<ReminderType, ReminderCounterInfo>;
+}
+
+/**
+ * Calculate badge info showing sooner time
+ */
+function calculateBadgeInfo(
+  settings: SettingsV2,
+  state: RuntimeStateV2,
+  now: number = Date.now()
+): BadgeInfo | null {
+  const candidates: Array<{ type: ReminderType; minutes: number }> = [];
+
+  for (const type of REMINDER_TYPES) {
+    const reminderSettings = settings.reminders[type];
+    const reminderState = state.reminders[type];
+
+    // Skip if not enabled for badge
+    if (!reminderSettings.enabled) continue;
+    if (!(reminderSettings.counterDisplay?.showInBadge ?? true)) continue;
+
+    // Skip if notification is active
+    if (reminderState.activeNotificationId) {
+      candidates.push({ type, minutes: 0 });
+      continue;
+    }
+
+    // Skip if paused or idle (unless showing those states)
+    if (reminderState.isPaused || state.isIdle) {
+      const remainingMs = reminderState.remainingMs ?? 0;
+      candidates.push({ type, minutes: remainingMs / 60000 });
+      continue;
+    }
+
+    // Calculate remaining time
+    let remainingMs = reminderState.remainingMs ?? 0;
+    if (reminderState.timerEndsAt) {
+      remainingMs = Math.max(0, reminderState.timerEndsAt - now);
+    }
+    candidates.push({ type, minutes: remainingMs / 60000 });
+  }
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  // Find minimum time
+  const minCandidate = candidates.reduce((min, current) =>
+    current.minutes < min.minutes ? current : min
+  );
+
+  // Determine urgency
+  let urgency: 'normal' | 'warning' | 'urgent' = 'normal';
+  if (minCandidate.minutes < 1) {
+    urgency = 'urgent';
+  } else if (minCandidate.minutes < 5) {
+    urgency = 'warning';
+  }
+
+  return {
+    minutes: minCandidate.minutes,
+    source: candidates.length === 1 ? minCandidate.type : null,
+    urgency,
+    showBadge: true,
+  };
+}
+
+/**
+ * Format badge text from minutes
+ */
+function formatBadgeText(minutes: number): string {
+  if (minutes <= 0) return '!';
+  if (minutes >= 10) return Math.floor(minutes).toString();
+  if (minutes >= 1) return minutes.toFixed(1);
+  return '<1';
+}
+
+/**
+ * Get badge color based on urgency
+ */
+function getBadgeColor(urgency: 'normal' | 'warning' | 'urgent'): string {
+  switch (urgency) {
+    case 'urgent':
+      return '#DC2626'; // Red
+    case 'warning':
+      return '#F59E0B'; // Yellow/Orange
+    default:
+      return '#6B7280'; // Gray
+  }
+}
+
+/**
+ * Update extension badge
+ */
+async function updateBadge(): Promise<void> {
+  try {
+    const { settings, state } = await getAll();
+    const badgeInfo = calculateBadgeInfo(settings, state);
+
+    if (!badgeInfo || !badgeInfo.showBadge) {
+      await chrome.action.setBadgeText({ text: '' });
+      return;
+    }
+
+    const badgeText = formatBadgeText(badgeInfo.minutes);
+    const badgeColor = getBadgeColor(badgeInfo.urgency);
+
+    await chrome.action.setBadgeText({ text: badgeText });
+    await chrome.action.setBadgeBackgroundColor({ color: badgeColor });
+
+    console.log(`[Breaksy] Badge updated: ${badgeText} (${badgeInfo.urgency})`);
+  } catch (error) {
+    console.error('[Breaksy] Failed to update badge:', error);
+  }
+}
 
 // ============================================================================
 // LIFECYCLE EVENTS
@@ -73,6 +255,9 @@ async function initializeExtension(): Promise<void> {
   
   isInitialized = true;
   console.log('[Breaksy] Extension initialized');
+  
+  // Update badge after initialization
+  await updateBadge();
 }
 
 /**
@@ -143,6 +328,9 @@ async function restoreState(): Promise<void> {
   
   isInitialized = true;
   console.log('[Breaksy] State restoration complete');
+  
+  // Update badge after restoration
+  await updateBadge();
 }
 
 // ============================================================================
@@ -211,6 +399,9 @@ async function scheduleReminder(type: ReminderType, delayMs?: number): Promise<v
   } catch (error) {
     console.error(`[Breaksy] Failed to schedule ${type} alarm:`, error);
   }
+  
+  // Update badge after scheduling
+  await updateBadge();
 }
 
 /**
@@ -294,6 +485,9 @@ async function handleReminderFired(type: ReminderType): Promise<void> {
   
   await scheduleReminder(type, intervalMs);
   console.log(`[Breaksy] ${type} reminder handled, next in ${reminderSettings.intervalMinutes}min`);
+  
+  // Update badge after handling reminder
+  await updateBadge();
 }
 
 // ============================================================================
@@ -437,6 +631,9 @@ async function handleSnooze(type: ReminderType): Promise<void> {
   
   await scheduleReminder(type, snoozeMs);
   console.log(`[Breaksy] ${type} snoozed for ${reminderSettings.snoozeMinutes} min`);
+
+  // Update badge after snooze
+  await updateBadge();
 }
 
 /**
@@ -450,6 +647,9 @@ async function pauseReminder(type: ReminderType): Promise<void> {
   
   await clearReminderAlarm(type);
   console.log(`[Breaksy] ${type} reminder paused`);
+
+  // Update badge after pausing
+  await updateBadge();
 }
 
 /**
@@ -485,6 +685,9 @@ async function resumeReminder(type: ReminderType): Promise<void> {
   }
   
   console.log(`[Breaksy] ${type} reminder resumed`);
+
+  // Update badge after resuming
+  await updateBadge();
 }
 
 /**
@@ -577,7 +780,10 @@ async function handleIdleStateChange(idleState: chrome.idle.IdleState): Promise<
     });
     
     console.log('[Breaksy] All reminders paused due to idle');
-    
+
+    // Update badge after idle state change
+    await updateBadge();
+
   } else if (idleState === 'active') {
     // System became active - resume all reminders
     if (!state.isIdle) return; // Wasn't idle
@@ -597,6 +803,9 @@ async function handleIdleStateChange(idleState: chrome.idle.IdleState): Promise<
     }
     
     console.log('[Breaksy] Reminders resumed after idle');
+
+    // Update badge after resuming from idle
+    await updateBadge();
   }
 }
 
@@ -620,11 +829,15 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
         case 'GET_STATE': {
           const { settings, state } = await getAll();
           const remainingSecondsByType = calculateRemainingSeconds(state);
+          const counterInfo = calculateCounterInfo(settings, state);
+          const badgeInfo = calculateBadgeInfo(settings, state);
           
           sendResponse({
             settings,
             state,
             remainingSecondsByType,
+            counterInfo,
+            badgeInfo,
           } as StateResponse);
           break;
         }
@@ -682,6 +895,36 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
             },
           };
           await setSettings({ reminders: updatedReminders });
+          
+          sendResponse({ success: true });
+          break;
+        }
+        
+        case 'SET_COUNTER_DISPLAY': {
+          const type = message.payload?.reminderType as ReminderType;
+          const counterDisplay = message.payload?.counterDisplay as {
+            enabled: boolean;
+            showInBadge: boolean;
+            badgePriority: 'high' | 'low';
+          };
+          
+          if (!type || !REMINDER_TYPES.includes(type) || !counterDisplay) {
+            sendResponse({ error: 'Invalid parameters' });
+            return;
+          }
+          
+          const currentSettings = await getSettings();
+          const updatedReminders = {
+            ...currentSettings.reminders,
+            [type]: {
+              ...currentSettings.reminders[type],
+              counterDisplay,
+            },
+          };
+          await setSettings({ reminders: updatedReminders });
+          
+          // Update badge since settings changed
+          await updateBadge();
           
           sendResponse({ success: true });
           break;

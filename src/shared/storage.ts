@@ -5,6 +5,7 @@ import {
   RuntimeStateV1,
   DEFAULT_SETTINGS_V2,
   DEFAULT_STATE_V2,
+  DEFAULT_COUNTER_DISPLAY_SETTINGS,
   ReminderType,
   REMINDER_TYPES,
   getDefaultReminderSettings,
@@ -46,7 +47,7 @@ function isRuntimeStateV1(state: unknown): state is RuntimeStateV1 {
  */
 function migrateSettingsV1ToV2(v1: SettingsV1): SettingsV2 {
   console.log('[Breaksy] Migrating settings from V1 to V2');
-  
+
   return {
     version: 2,
     idleThresholdSeconds: v1.idleThresholdSeconds ?? 60,
@@ -57,6 +58,7 @@ function migrateSettingsV1ToV2(v1: SettingsV1): SettingsV2 {
         snoozeMinutes: v1.snoozeMinutes ?? 5,
         title: 'Time for an eye break 👀',
         message: 'Look at something ~20 ft / 6 m away for 20 seconds.',
+        counterDisplay: { ...DEFAULT_COUNTER_DISPLAY_SETTINGS, badgePriority: 'high' },
       },
       water: {
         enabled: false, // New reminder starts disabled
@@ -64,6 +66,7 @@ function migrateSettingsV1ToV2(v1: SettingsV1): SettingsV2 {
         snoozeMinutes: 10,
         title: 'Time to hydrate 💧',
         message: 'Drink a glass of water.',
+        counterDisplay: { ...DEFAULT_COUNTER_DISPLAY_SETTINGS, badgePriority: 'low' },
       },
     },
     ui: {

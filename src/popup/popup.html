@@ -20,11 +20,25 @@
       </button>
     </div>
 
-    <!-- Status Display -->
-    <div class="status-display" id="status-display">
-      <div class="status-word" id="status-word"></div>
-      <div class="status-time" id="status-time">--:--</div>
-      <div class="status-suffix" id="status-suffix">remaining</div>
+    <!-- Counters Display -->
+    <div class="counters-container">
+      <div class="counter-item" id="counter-eye">
+        <div class="counter-header">
+          <span class="counter-icon">👀</span>
+          <span class="counter-label">Eye Break</span>
+        </div>
+        <div class="counter-time" id="counter-eye-time">Next in: --:-- min</div>
+        <div class="counter-status" id="counter-eye-status">Disabled</div>
+      </div>
+      <div class="counter-divider"></div>
+      <div class="counter-item" id="counter-water">
+        <div class="counter-header">
+          <span class="counter-icon">💧</span>
+          <span class="counter-label">Water Reminder</span>
+        </div>
+        <div class="counter-time" id="counter-water-time">Next in: --:-- min</div>
+        <div class="counter-status" id="counter-water-status">Disabled</div>
+      </div>
     </div>
 
     <!-- Primary Action -->

@@ -18,21 +18,22 @@ const ELEMENTS = {
   // Segmented control
   segmentEye: document.getElementById('segment-eye') as HTMLButtonElement,
   segmentWater: document.getElementById('segment-water') as HTMLButtonElement,
-  
-  // Status display
-  statusWord: document.getElementById('status-word') as HTMLElement,
-  statusTime: document.getElementById('status-time') as HTMLElement,
-  statusSuffix: document.getElementById('status-suffix') as HTMLElement,
-  
+
+  // Counters
+  counterEyeTime: document.getElementById('counter-eye-time') as HTMLElement,
+  counterEyeStatus: document.getElementById('counter-eye-status') as HTMLElement,
+  counterWaterTime: document.getElementById('counter-water-time') as HTMLElement,
+  counterWaterStatus: document.getElementById('counter-water-status') as HTMLElement,
+
   // Buttons
   btnTrigger: document.getElementById('btn-trigger') as HTMLButtonElement,
   btnSnooze: document.getElementById('btn-snooze') as HTMLButtonElement,
   btnPause: document.getElementById('btn-pause') as HTMLButtonElement,
-  
+
   // Interval controls
   intervalSelect: document.getElementById('interval-select') as HTMLSelectElement,
   intervalCustom: document.getElementById('interval-custom') as HTMLInputElement,
-  
+
   // Footer
   linkSettings: document.getElementById('link-settings') as HTMLAnchorElement,
 } as const;
@@ -44,7 +45,6 @@ const ELEMENTS = {
 let currentState: StateResponse | null = null;
 let currentReminderType: ReminderType = 'eye';
 let countdownInterval: ReturnType<typeof setInterval> | null = null;
-let displaySeconds: number = 0;
 let isLoading: boolean = true;
 
 // ============================================================================
@@ -62,9 +62,10 @@ async function init(): Promise<void> {
 document.addEventListener('DOMContentLoaded', init);
 
 function showLoadingState(): void {
-  ELEMENTS.statusTime.textContent = '--:--';
-  ELEMENTS.statusWord.textContent = 'Loading...';
-  ELEMENTS.statusSuffix.classList.add('hidden');
+  ELEMENTS.counterEyeTime.textContent = 'Next in: --:-- min';
+  ELEMENTS.counterEyeStatus.textContent = 'Loading...';
+  ELEMENTS.counterWaterTime.textContent = 'Next in: --:-- min';
+  ELEMENTS.counterWaterStatus.textContent = 'Loading...';
 }
 
 // ============================================================================
@@ -94,7 +95,10 @@ async function refreshState(): Promise<void> {
     }
     
     currentState = response;
-    
+
+    // Update local countdown from new state
+    updateLocalCountdown();
+
     // Determine which reminder type to show
     const savedType = response.settings?.ui?.lastSelectedReminder;
     if (savedType && REMINDER_TYPES.includes(savedType)) {
@@ -102,11 +106,7 @@ async function refreshState(): Promise<void> {
     } else {
       currentReminderType = 'eye';
     }
-    
-    // Update display seconds for selected type
-    const seconds = response.remainingSecondsByType?.[currentReminderType];
-    displaySeconds = typeof seconds === 'number' ? seconds : 0;
-    
+
     // Update UI
     updateUI();
     
@@ -117,9 +117,10 @@ async function refreshState(): Promise<void> {
 }
 
 function showErrorState(message: string): void {
-  ELEMENTS.statusTime.textContent = 'Error';
-  ELEMENTS.statusWord.textContent = message;
-  ELEMENTS.statusSuffix.classList.add('hidden');
+  ELEMENTS.counterEyeTime.textContent = 'Error';
+  ELEMENTS.counterEyeStatus.textContent = message;
+  ELEMENTS.counterWaterTime.textContent = 'Error';
+  ELEMENTS.counterWaterStatus.textContent = message;
 }
 
 // ============================================================================
@@ -160,13 +161,14 @@ function updateUI(): void {
   
   // Update segmented control
   updateSegmentedControl();
-  
-  // Update status display
-  updateStatusDisplay(settings, state, reminderSettings, reminderState);
-  
+
+  // Update both counters
+  updateCounter('eye');
+  updateCounter('water');
+
   // Update interval selector
   updateIntervalSelector(reminderSettings.intervalMinutes);
-  
+
   // Update button labels
   updateButtons(reminderSettings, reminderState, state.isIdle);
 }
@@ -182,42 +184,8 @@ function updateSegmentedControl(): void {
   }
 }
 
-function updateStatusDisplay(
-  _settings: StateResponse['settings'],
-  state: StateResponse['state'],
-  reminderSettings: { enabled: boolean },
-  reminderState: { isPaused: boolean }
-): void {
-  // Clear previous status classes
-  ELEMENTS.statusWord.className = 'status-word';
-  
-  if (!reminderSettings.enabled) {
-    // Disabled state
-    ELEMENTS.statusWord.textContent = 'Disabled';
-    ELEMENTS.statusWord.classList.add('status-disabled');
-    ELEMENTS.statusTime.textContent = '--:--';
-    ELEMENTS.statusSuffix.classList.add('hidden');
-  } else if (state.isIdle) {
-    // Idle state
-    ELEMENTS.statusWord.textContent = 'Idle';
-    ELEMENTS.statusWord.classList.add('status-idle');
-    ELEMENTS.statusTime.textContent = formatTime(displaySeconds);
-    ELEMENTS.statusSuffix.classList.remove('hidden');
-    ELEMENTS.statusSuffix.textContent = 'remaining';
-  } else if (reminderState.isPaused) {
-    // Paused state
-    ELEMENTS.statusWord.textContent = 'Paused';
-    ELEMENTS.statusWord.classList.add('status-paused');
-    ELEMENTS.statusTime.textContent = formatTime(displaySeconds);
-    ELEMENTS.statusSuffix.classList.remove('hidden');
-    ELEMENTS.statusSuffix.textContent = 'remaining';
-  } else {
-    // Active state
-    ELEMENTS.statusWord.textContent = '';
-    ELEMENTS.statusTime.textContent = formatTime(displaySeconds);
-    ELEMENTS.statusSuffix.classList.remove('hidden');
-    ELEMENTS.statusSuffix.textContent = 'remaining';
-  }
+function updateCounter(type: ReminderType): void {
+  updateCounterDisplay(type);
 }
 
 function updateIntervalSelector(interval: number): void {
@@ -248,48 +216,104 @@ function updateButtons(
   ELEMENTS.btnPause.textContent = isPaused ? 'Resume' : 'Pause';
 }
 
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-}
-
 // ============================================================================
 // COUNTDOWN TIMER
 // ============================================================================
 
+// Track remaining seconds locally for countdown
+let localRemainingSeconds: Record<ReminderType, number> = {
+  eye: 0,
+  water: 0,
+};
+
+function updateLocalCountdown(): void {
+  if (!currentState) return;
+
+  // Update local countdown from state
+  for (const type of REMINDER_TYPES) {
+    const counterInfo = currentState.counterInfo?.[type];
+    if (counterInfo && counterInfo.status === 'active') {
+      localRemainingSeconds[type] = Math.max(0, counterInfo.remainingSeconds);
+    } else if (counterInfo) {
+      // For paused, idle, disabled, notification - use the state value
+      localRemainingSeconds[type] = counterInfo.remainingSeconds;
+    }
+  }
+}
+
 function startCountdown(): void {
   if (countdownInterval) clearInterval(countdownInterval);
-  
+
+  // Initialize local countdown
+  updateLocalCountdown();
+
   countdownInterval = setInterval(async () => {
     if (!currentState || isLoading) return;
-    
-    const state = currentState.state;
-    const settings = currentState.settings;
-    
-    // Safely get reminder state
-    const reminderSettings = settings?.reminders?.[currentReminderType];
-    const reminderState = state?.reminders?.[currentReminderType];
-    
-    // Only decrement if enabled, not paused, and not idle
-    if (reminderSettings?.enabled && !reminderState?.isPaused && !state?.isIdle) {
-      displaySeconds = Math.max(0, displaySeconds - 1);
-      
-      // Check if timer reached zero
-      if (displaySeconds <= 0) {
-        // Trigger check for this reminder
-        await chrome.runtime.sendMessage({
-          type: 'CHECK_NOTIFICATION',
-          payload: { reminderType: currentReminderType },
-        });
-        // Refresh state to get new timer
-        await refreshState();
-      } else {
-        // Just update the display
-        updateUI();
+
+    let needsRefresh = false;
+
+    // Decrement active timers
+    for (const type of REMINDER_TYPES) {
+      const counterInfo = currentState.counterInfo?.[type];
+      if (counterInfo?.status === 'active' && localRemainingSeconds[type] > 0) {
+        localRemainingSeconds[type]--;
+
+        // Check if timer reached zero
+        if (localRemainingSeconds[type] <= 0) {
+          needsRefresh = true;
+        }
       }
     }
+
+    if (needsRefresh) {
+      // Timer reached zero, refresh state from background
+      await refreshState();
+      updateLocalCountdown();
+    } else {
+      // Just update the display with local countdown
+      updateCounterDisplay('eye');
+      updateCounterDisplay('water');
+    }
   }, 1000);
+}
+
+function updateCounterDisplay(type: ReminderType): void {
+  if (!currentState) return;
+
+  const counterInfo = currentState.counterInfo?.[type];
+  if (!counterInfo) return;
+
+  const isEye = type === 'eye';
+  const timeEl = isEye ? ELEMENTS.counterEyeTime : ELEMENTS.counterWaterTime;
+  const statusEl = isEye ? ELEMENTS.counterEyeStatus : ELEMENTS.counterWaterStatus;
+
+  if (counterInfo.status === 'disabled') {
+    timeEl.textContent = 'Next in: --:-- min';
+    statusEl.textContent = 'Disabled';
+    statusEl.className = 'counter-status status-disabled';
+  } else if (counterInfo.status === 'notification') {
+    timeEl.textContent = 'Next in: 00:00 min';
+    statusEl.textContent = 'Notification!';
+    statusEl.className = 'counter-status status-notification';
+  } else {
+    // Use local remaining seconds for active countdown
+    const remainingSecs = localRemainingSeconds[type];
+    const minutes = Math.floor(remainingSecs / 60);
+    const seconds = remainingSecs % 60;
+    timeEl.textContent = `Next in: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} min`;
+
+    // Simple status text
+    if (counterInfo.status === 'active') {
+      statusEl.textContent = 'Active';
+      statusEl.className = 'counter-status status-active';
+    } else if (counterInfo.status === 'paused') {
+      statusEl.textContent = 'Paused';
+      statusEl.className = 'counter-status status-paused';
+    } else if (counterInfo.status === 'idle') {
+      statusEl.textContent = 'Idle';
+      statusEl.className = 'counter-status status-idle';
+    }
+  }
 }
 
 // ============================================================================
