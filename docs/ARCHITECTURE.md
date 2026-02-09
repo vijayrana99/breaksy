@@ -1,16 +1,16 @@
 # BREAKSY TECHNICAL MANUAL
 ## Chrome Extension Architecture Documentation
 
-**Version:** 2.0.0  
+**Version:** 1.0.0  
 **Last Updated:** February 6, 2026  
-**Extension Version:** 2.0.0
+**Extension Version:** 1.0.0
 
 ---
 
 ## Table of Contents
 
 1. [Project Overview](#1-project-overview)
-2. [What's New in v2.0](#2-whats-new-in-v20)
+2. [What's New in v1.0](#2-whats-new-in-v10)
 3. [File Structure](#3-file-structure)
 4. [Extension Permissions](#4-extension-permissions)
 5. [Core Data Models](#5-core-data-models)
@@ -53,7 +53,7 @@
 
 ---
 
-## 2. WHAT'S NEW IN V2.0
+## 2. WHAT'S NEW IN V1.0
 
 ### Multi-Reminder Architecture
 - **Reminder Types**: `ReminderType = 'eye' | 'water'` (extendable)
@@ -61,7 +61,7 @@
 - **Multiple Alarms**: `breaksy-reminder:eye`, `breaksy-reminder:water`
 - **Type-Encoded IDs**: Notification IDs include type prefix for proper routing
 
-### Data Model v2
+### Data Model v1
 - **SettingsV2**: Schema versioned with `version: 2`, includes `reminders` record
 - **RuntimeStateV2**: Per-reminder runtime state keyed by type
 - **Migration**: Automatic V1 → V2 migration on first run
